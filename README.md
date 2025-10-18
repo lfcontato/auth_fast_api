@@ -64,3 +64,7 @@ Digite Reload Window (Recarregar Janela) e selecione o comando.
 ├── go.mod
 └── vercel.json           # Para mapear rotas bonitas
 ```
+
+go mod edit -module=github.com/lfcontato/auth_fast_api
+go mod tidy
+go run main.go
