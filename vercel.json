@@ -11,7 +11,7 @@
     ],
     "functions": {
         "api/index.go": {
-            "runtime": "@vercel/go@1.22"
+            "runtime": "@vercel/go@1.22.0"
         }
     }
 }
