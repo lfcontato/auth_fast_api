@@ -56,8 +56,46 @@ Próximos passos sugeridos:
 - Escolher driver e DSN para o banco (Postgres ou SQLite) e implementar `db.Connect`.
 - Adicionar mensagens padronizadas e localização (pt_br/en) conforme DTO.
 
-Atualização de testes (REST Client):
-- Adicionados arquivos `.http` em `tests/` para testar localmente via VS Code REST Client:
-  - `tests/health.http` – GET `/healthz`.
-  - `tests/auth.http` – POST login e POST refresh, usando `{{$dotenv ROOT_AUTH_USER}}` e `{{$dotenv ROOT_AUTH_PASSWORD}}` do `.env`.
-  - `tests/README.md` – instruções de uso.
+
+---
+Data: 2025-10-19
+
+Resumo das mudanças implementadas neste ciclo:
+
+Infra/Arquitetura
+- Refatoração do handler HTTP para `pkg/httpapi/httpapi.go` (público). A função serverless em `api/index.go` (package `handler`) apenas delega para este handler.
+- Rewrites no `vercel.json` para aceitar `/healthz` e `/admin` sem prefixo `/api`.
+- `.vercelignore` adicionado para evitar upload de `node_modules` e artefatos locais que quebravam o build Go na Vercel.
+- `.gitignore` ampliado (binários Go, node_modules, editores etc.).
+- Fallback de banco em ambiente serverless: se `DATABASE_URL` estiver vazio em Vercel/Lambda, usa SQLite em `/tmp/auth_fast_api.db` (área gravável). Mantém portabilidade; para produção real, recomenda-se Postgres.
+- Logs de requisição em todas as rotas (método, caminho, status, duração) via `statusWriter` com `LOG_LEVEL` (DEBUG/INFO/WARN/ERROR).
+
+E-mail
+- Serviço SMTP (`internal/services/email`) agora suporta templates embutidos (embedded) via `template_email/embed.go`. Se o arquivo não estiver no filesystem, carrega do FS embutido.
+- Em ambiente serverless, envios de e-mail passaram a ser síncronos (antes eram goroutines após a resposta), garantindo que o e-mail seja enviado antes do término da execução.
+- Fallbacks de remetente: se `EMAIL_FROM_*` não forem definidos, usa `EMAIL_SERVER_USERNAME`/`EMAIL_SERVER_NAME`.
+
+Rotas implementadas/ajustadas
+- `POST /admin` (criar admin):
+  - Aceita `/admin` e `/admin/`.
+  - Campo `password` opcional; se vazio, gera senha numérica de 8 dígitos.
+  - Envia e-mail ao novo admin com senha inicial, código de verificação e link de verificação.
+- Verificação de conta:
+  - `POST /admin/auth/verify-code/{code}` (recomendado): recebe apenas `password` no corpo.
+  - `POST /admin/auth/verify` (compatibilidade): recebe `code` e `password` no corpo.
+  - Nova tabela `admins_verifications` para armazenar e consumir códigos.
+- Recuperação de senha:
+  - `POST /admin/auth/password-recovery`: gera nova senha (8 dígitos), marca `is_verified=0`, cria novo código e envia e-mail com senha e link de verificação.
+
+Templates de e-mail
+- `template_email/admin_created.html` atualizado para incluir `Senha inicial`, `Código de verificação` e botão com `VerifyURL`.
+
+Documentação atualizada
+- `USERS.md`: verificação de conta (com `{code}` na URL) e exemplo cURL; observações e fluxo típico frontend → backend.
+- `HOWTOUSE.md`: bases de URL, rotas atuais e exemplos de login/refresh/criar admin; será ampliado com verificação e recuperação (ver patch abaixo).
+
+Observações de deploy (Vercel)
+- `api/index.go` deve ser `package handler` com `func Handler(http.ResponseWriter, *http.Request)`. O build remoto exige isso.
+- Rewrites configurados para aceitar rotas sem `/api`.
+- Em logs de produção, agora aparece: `[INFO]  METHOD /path -> STATUS (duration)`.
+

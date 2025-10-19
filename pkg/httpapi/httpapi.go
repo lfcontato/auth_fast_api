@@ -172,35 +172,43 @@ func adminAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Envia e-mail com nova senha e código
-	if mailer != nil {
-		verifyURL := buildVerifyURL(r, code)
-		go func(email, username, pass, code, verifyURL string) {
-			tmpl := cfg.AdminCreatedTemplate
-			if strings.TrimSpace(tmpl) == "" {
-				tmpl = cfg.EmailTemplateName
-			}
-			data := map[string]any{
-				"Title":            "Recuperação de senha",
-				"Message":          "Sua senha foi redefinida. Use a nova senha e o código abaixo para verificar sua conta.",
-				"Email":            email,
-				"Username":         username,
-				"Password":         pass,
-				"VerificationCode": code,
-				"VerifyURL":        verifyURL,
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			if err := mailer.Send(ctx, emailsvc.Params{
-				To:           []string{email},
-				Subject:      contants.EmailSubjectPasswordRecovery,
-				TemplateName: tmpl,
-				Data:         data,
-			}); err != nil {
-				logWarn("send email password recovery: %v", err)
-			}
-		}(req.Email, username, newPass, code, verifyURL)
-	}
+    // Envia e-mail com nova senha e código.
+    // Em serverless (Vercel), evite goroutine: envie de forma síncrona antes de responder.
+    if mailer != nil {
+        verifyURL := buildVerifyURL(r, code)
+        tmpl := cfg.AdminCreatedTemplate
+        if strings.TrimSpace(tmpl) == "" {
+            tmpl = cfg.EmailTemplateName
+        }
+        data := map[string]any{
+            "Title":            "Recuperação de senha",
+            "Message":          "Sua senha foi redefinida. Use a nova senha e o código abaixo para verificar sua conta.",
+            "Email":            req.Email,
+            "Username":         username,
+            "Password":         newPass,
+            "VerificationCode": code,
+            "VerifyURL":        verifyURL,
+        }
+        ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+        defer cancel()
+        if os.Getenv("VERCEL") != "" || os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+            if err := mailer.Send(ctx, emailsvc.Params{
+                To:           []string{req.Email},
+                Subject:      contants.EmailSubjectPasswordRecovery,
+                TemplateName: tmpl,
+                Data:         data,
+            }); err != nil {
+                writeJSON(w, http.StatusBadGateway, map[string]any{"success": false, "code": "EMAIL_502_SEND", "message": "Falha ao enviar e-mail"})
+                return
+            }
+        } else {
+            go func(p emailsvc.Params) {
+                if err := mailer.Send(ctx, p); err != nil {
+                    logWarn("send email password recovery: %v", err)
+                }
+            }(emailsvc.Params{To: []string{req.Email}, Subject: contants.EmailSubjectPasswordRecovery, TemplateName: tmpl, Data: data})
+        }
+    }
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true})
 }
@@ -382,37 +390,38 @@ func adminCreateHandler(w http.ResponseWriter, r *http.Request) {
 		code = ""
 	}
 
-	// Envia e-mail de criação
-	if mailer != nil {
-		go func() {
-			tmpl := cfg.EmailTemplateName
-			if cfg.AdminCreatedTemplate != "" {
-				tmpl = cfg.AdminCreatedTemplate
-			}
-			verifyURL := buildVerifyURL(r, code)
-			data := map[string]any{
-				"Title":            "Conta de administrador criada",
-				"Message":          "Sua conta foi criada com sucesso.",
-				"Email":            req.Email,
-				"Username":         req.Username,
-				"SystemRole":       req.SystemRole,
-				"CreatedByRole":    actingRole,
-				"Password":         req.Password,
-				"VerificationCode": code,
-				"VerifyURL":        verifyURL,
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			if err := mailer.Send(ctx, emailsvc.Params{
-				To:           []string{req.Email},
-				Subject:      contants.EmailSubjectAdminCreated,
-				TemplateName: tmpl,
-				Data:         data,
-			}); err != nil {
-				logWarn("send email admin created: %v", err)
-			}
-		}()
-	}
+    // Envia e-mail de criação (síncrono em serverless, assíncrono em servidor local).
+    if mailer != nil {
+        tmpl := cfg.EmailTemplateName
+        if cfg.AdminCreatedTemplate != "" {
+            tmpl = cfg.AdminCreatedTemplate
+        }
+        verifyURL := buildVerifyURL(r, code)
+        data := map[string]any{
+            "Title":            "Conta de administrador criada",
+            "Message":          "Sua conta foi criada com sucesso.",
+            "Email":            req.Email,
+            "Username":         req.Username,
+            "SystemRole":       req.SystemRole,
+            "CreatedByRole":    actingRole,
+            "Password":         req.Password,
+            "VerificationCode": code,
+            "VerifyURL":        verifyURL,
+        }
+        ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+        defer cancel()
+        if os.Getenv("VERCEL") != "" || os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+            if err := mailer.Send(ctx, emailsvc.Params{To: []string{req.Email}, Subject: contants.EmailSubjectAdminCreated, TemplateName: tmpl, Data: data}); err != nil {
+                logWarn("send email admin created: %v", err)
+            }
+        } else {
+            go func(p emailsvc.Params) {
+                if err := mailer.Send(ctx, p); err != nil {
+                    logWarn("send email admin created: %v", err)
+                }
+            }(emailsvc.Params{To: []string{req.Email}, Subject: contants.EmailSubjectAdminCreated, TemplateName: tmpl, Data: data})
+        }
+    }
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"success":     true,

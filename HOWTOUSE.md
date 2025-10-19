@@ -14,8 +14,9 @@ Outros recursos (CRUD de administradores, verificação de conta, recuperação 
 
 - Ambiente local (servidor de desenvolvimento):
   - Base: `http://localhost:8080`
-- Ambiente Vercel (serverless, com rewrites):
-  - Base: `https://<seu-projeto>.vercel.app/api`
+- Ambiente Vercel (serverless):
+  - Base recomendada: `https://<seu-projeto>.vercel.app`
+  - Observação: as rotas também funcionam com `/api` por compatibilidade (ex.: `/api/healthz`). Rewrites já permitem `/healthz` e `/admin` sem prefixo.
 
 As rotas documentadas abaixo assumem a base local. Em Vercel, prefixe com `/api` se necessário (ex.: `/api/admin/auth/token`).
 
@@ -135,6 +136,29 @@ curl -X POST http://localhost:8080/admin/auth/token/refresh \
 
 Observação: após a criação, um e-mail é enviado ao novo administrador usando o template configurado em `ADMIN_CREATED_TEMPLATE_NAME` (padrão `admin_created.html`).
 
+## Verificação de Conta
+- Método: POST
+- Rotas:
+  - `/admin/auth/verify-code/{code}` (recomendado; pública). Corpo: `{ "password": "<senha_inicial>" }`
+  - `/admin/auth/verify` (compatibilidade; pública). Corpo: `{ "code": "<64 hex>", "password": "<senha_inicial>" }`
+- 200 OK: `{ "success": true, "verified": true }`
+- Erros: `AUTH_400_006/007/008`, `AUTH_401_004`, `AUTH_500_003..006`
+
+Exemplo curl (code na URL):
+```
+curl -X POST http://localhost:8080/admin/auth/verify-code/<CODE> \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"<SENHA>"}'
+```
+
+## Recuperação de Senha
+- Método: POST
+- Rota: `/admin/auth/password-recovery` (pública)
+- Corpo: `{ "email": "<admin@dominio.com>" }`
+- Comportamento: gera nova senha (8 dígitos), `is_verified=0`, cria novo código e envia e-mail com senha/código/link de verificação.
+- 200 OK: `{ "success": true, "sent": true }` (também quando e-mail não existe, para evitar enumeração)
+- Em Vercel, envio é síncrono (a função aguarda o SMTP concluir).
+
 # Fluxo Recomendado para Clientes/IA
 1. Efetue login com `username` e `password` e armazene `access_token` e `refresh_token` de forma segura.
 2. Para chamadas a recursos protegidos, envie `Authorization: Bearer <access_token>`.
@@ -161,6 +185,8 @@ Passos:
   - `TOKEN_REFRESH_EXPIRE_SECONDS` (default 2592000)
   - `ROOT_AUTH_USER`, `ROOT_AUTH_EMAIL`, `ROOT_AUTH_PASSWORD` (seed do usuário root na primeira execução)
   - `LOG_LEVEL` (DEBUG, INFO, WARN, ERROR) – controla verbosidade de logs da API (requisições e eventos)
+  - `PUBLIC_BASE_URL` – base usada para montar links de verificação enviados por e‑mail
+  - Em Vercel: se `DATABASE_URL` estiver vazio, a API usa SQLite em `/tmp/auth_fast_api.db` (dados efêmeros). Para produção, configure Postgres via `DATABASE_URL`.
 
 ## E-mails (SMTP)
 
@@ -215,7 +241,8 @@ Crie o template HTML em `template_email/email_notifications.html` (ou outro nome
 Templates incluídos por padrão em `template_email/`:
 - `email_notifications.html` – Notificação genérica com `Title`, `Message`, `ActionURL`, `ActionText`, `FooterText`, `ExtraNote`.
 - `security_notifications.html` – Alertas de segurança com `Event`, `Time`, `IPAddress`, `UserAgent`, além de `Title/Message`.
-- `admin_created.html` – Boas-vindas ao novo admin com `Email`, `Username`, `SystemRole`, `CreatedByRole`, `LoginURL` (opcional).
+- `admin_created.html` – Boas-vindas ao novo admin com `Email`, `Username`, `SystemRole`, `CreatedByRole`, `Senha inicial`, `Código` e `VerifyURL`.
+Observação: os templates também estão embutidos no binário (via embed). Se o arquivo não existir no filesystem, o serviço usa o template embutido.
 
 Para enviar o e-mail de criação de administrador, configure `ADMIN_CREATED_TEMPLATE_NAME=admin_created.html` (padrão já aplicado) e certifique-se de que o arquivo exista em `EMAIL_SERVER_TEMPLATE_DIR`.
 
@@ -227,8 +254,7 @@ Notas por provedor:
 
 Os itens abaixo constam no README e serão expandidos. Interfaces e semântica previstas:
 
-- Verificação e recuperação de conta (rotas `/admin/auth/verify`, `/admin/auth/verify-link`, `/admin/auth/password-recovery`, `/admin/auth/verification-code`).
-  - Objetivo: confirmar e-mail, reenviar código, iniciar e concluir recuperação de senha.
+- Reenvio de código de verificação (`/admin/auth/verification-code`) e link público (`/admin/auth/verify-link`).
 - Gerenciamento hierárquico de administradores (`/admin/` CRUD e detalhes, alteração de senha/e-mail próprios).
   - Regras por `system_role` (guest < user < admin < root) e prevenção de operações em papéis superiores.
 - Bloqueios e segurança (`/admin/unlock`, `/admin/unlock/all`).

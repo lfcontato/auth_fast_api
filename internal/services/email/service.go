@@ -15,6 +15,8 @@ import (
     "path/filepath"
     "strings"
     "time"
+
+    tplfs "github.com/lfcontato/auth_fast_api/template_email"
 )
 
 // EncryptionMode define o tipo de criptografia para SMTP.
@@ -156,12 +158,28 @@ func (s *Service) renderTemplate(name string, data any) (string, error) {
     if strings.TrimSpace(name) == "" {
         return "", fmt.Errorf("template: nome inválido")
     }
-    path := filepath.Join(s.TemplateDir, name)
-    t, err := template.New(filepath.Base(path)).Option("missingkey=zero").ParseFiles(path)
-    if err != nil { return "", err }
-    var buf bytes.Buffer
-    if err := t.Execute(&buf, data); err != nil { return "", err }
-    return buf.String(), nil
+    // 1) Tenta via filesystem, se TemplateDir foi configurado
+    if strings.TrimSpace(s.TemplateDir) != "" {
+        path := filepath.Join(s.TemplateDir, name)
+        if t, err := template.New(filepath.Base(path)).Option("missingkey=zero").ParseFiles(path); err == nil {
+            var buf bytes.Buffer
+            if execErr := t.Execute(&buf, data); execErr != nil {
+                return "", execErr
+            }
+            return buf.String(), nil
+        }
+        // Fallthrough para embedded FS se falhar
+    }
+    // 2) Tenta via embedded FS (templates embutidos no binário)
+    if t, err := template.New(name).Option("missingkey=zero").ParseFS(tplfs.FS, name); err == nil {
+        var buf bytes.Buffer
+        if execErr := t.Execute(&buf, data); execErr != nil {
+            return "", execErr
+        }
+        return buf.String(), nil
+    } else {
+        return "", fmt.Errorf("template: render failed for %s: %w", name, err)
+    }
 }
 
 // buildMIMEMessage cria um e-mail simples em HTML (UTF-8).
@@ -247,4 +265,3 @@ func toQuotedPrintable(s string) []byte {
     }
     return out.Bytes()
 }
-

@@ -82,7 +82,7 @@ content-length: 57
 {"ok":true,"service":"auth_fast_api","status":"healthy"}
 
 
-# -- assim não funciona
+# -- assim funciona
 curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
 
 A server error has occurred
@@ -91,8 +91,17 @@ FUNCTION_INVOCATION_FAILED
 
 gru1::rhcj4-1760893167938-264f5f8cb8b0
 
-```
+# -- assim funciona envia o e-mail
+curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
+{"sent":true,"success":true}
 
+# -- assim funciona envia o e-mail / reposta dá ok mas nao envia
+curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
+{"sent":true,"success":true}
+
+
+
+```
 
 
 

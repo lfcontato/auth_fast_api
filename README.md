@@ -182,9 +182,16 @@ Estes recursos implementam o CRUD de administradores, respeitando a hierarquia d
 
 ## Atualizações recentes
 
-- Serviço de E-mail SMTP implementado em `internal/services/email` (compatível com STARTTLS e SSL/TLS). Configuração via `.env` (`EMAIL_SERVER_*`, `EMAIL_FROM_*`, `EMAIL_TEMPLATE_NAME`, `SECURITY_TEMPLATE_NAME`, `ADMIN_CREATED_TEMPLATE_NAME`).
-- Endpoint implementado: `POST /admin/` (criar administrador) – requer Bearer token de um administrador com papel superior ao alvo. Ao criar, dispara e-mail ao novo administrador usando o template configurado (padrão: `admin_created.html`).
- - Logging de requisições e eventos (login, refresh, criação de admin) controlado por `LOG_LEVEL` (DEBUG/INFO/WARN/ERROR).
+- Refatoração do handler: `pkg/httpapi/httpapi.go` concentra as rotas; `api/index.go` (package `handler`) delega para ele (compatível com Vercel).
+- Rewrites no `vercel.json` habilitam `/healthz` e `/admin` sem prefixo `/api`.
+- Banco em serverless: fallback automático para SQLite em `/tmp` quando `DATABASE_URL` não estiver definido (dados efêmeros). Para produção, configure Postgres.
+- Serviço de E-mail SMTP (`internal/services/email`) com templates embutidos (embed). Se o arquivo não existir no FS, usa o template embutido.
+- Envio de e-mail síncrono em ambientes serverless (Vercel/Lambda) para garantir entrega antes do término da execução.
+- Novas rotas e comportamentos:
+  - `POST /admin` (criar admin): `password` opcional; gera senha de 8 dígitos; envia e-mail com senha, código e link de verificação.
+  - `POST /admin/auth/verify-code/{code}` (pública) e `POST /admin/auth/verify` (compat.): ativam a conta ao validar código+senha.
+  - `POST /admin/auth/password-recovery` (pública): redefine senha (8 dígitos), invalida verificação e envia código/link para verificação.
+- Observabilidade: logs por requisição (método, caminho, status e duração) com `LOG_LEVEL`.
 
 ### `POST /admin/`
 
