@@ -23,3 +23,5 @@ dist/
 *.log
 *.tmp
 .DS_Store
+
+logs_vercel/

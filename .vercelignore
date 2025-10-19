@@ -2,6 +2,7 @@
 node_modules
 package-lock.json
 package.json
+logs_vercel/
 
 # Local caches/binaries not needed in the serverless build
 .vercel/cache
