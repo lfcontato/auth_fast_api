@@ -1,12 +1,11 @@
 {
     "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "/api/index.go"
-        },
-        {
-            "source": "/login",
-            "destination": "/api/index.go"
-        }
+        { "source": "/api", "destination": "/api/index.go" },
+        { "source": "/api/(.*)", "destination": "/api/index.go" },
+        { "source": "/login", "destination": "/api/index.go" },
+        { "source": "/healthz", "destination": "/api/index.go" },
+        { "source": "/admin", "destination": "/api/index.go" },
+        { "source": "/admin/(.*)", "destination": "/api/index.go" }
     ]
+  
 }

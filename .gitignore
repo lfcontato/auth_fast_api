@@ -1,1 +1,25 @@
+# Vercel local metadata
 .vercel
+
+# Node / Vercel CLI artifacts
+node_modules/
+package-lock.json
+# package.json
+
+# Go build outputs
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Editor and OS junk
+.vscode/
+.idea/
+*.log
+*.tmp
+.DS_Store

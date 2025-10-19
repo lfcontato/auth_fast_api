@@ -5,19 +5,18 @@
 package main
 
 import (
-    "log"
-    "net/http"
+	"log"
+	"net/http"
 
-    handler "github.com/lfcontato/auth_fast_api/api"
+	"github.com/lfcontato/auth_fast_api/pkg/httpapi"
 )
 
 // main inicia um servidor HTTP local e encaminha todas as rotas para o handler da API.
 func main() {
-    http.HandleFunc("/", handler.Handler)
-    addr := ":8080"
-    log.Printf("API iniciada em http://localhost%v", addr)
-    if err := http.ListenAndServe(addr, nil); err != nil {
-        log.Fatalf("server error: %v", err)
-    }
+	http.HandleFunc("/", httpapi.Handler)
+	addr := ":8080"
+	log.Printf("API iniciada em http://localhost%v", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
 }
-
