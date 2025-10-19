@@ -167,6 +167,7 @@ Estes recursos implementam o CRUD de administradores, respeitando a hierarquia d
 | **`/admin/{admin_id}`** | `DELETE` | **Remover Administrador.** Exclui o administrador e seus contatos. | **Requer autenticação Bearer.** Impede **autoexclusão** e remoção de papéis superiores (`root`). |
 | **`/admin/password`** | `PATCH` | **Alterar Senha Própria.** Permite ao admin autenticado trocar sua senha (requer senha atual). | **Rate limit/lock** por falhas consecutivas (monitorado em Redis). E-mail de confirmação após alteração. |
 | **`/admin/email`** | `PATCH` | **Alterar E-mail Próprio.** Atualiza o e-mail do admin, o que **reinicia o processo de verificação** (`is_verified = false`). | Novo código é gerado e enviado automaticamente. |
+| **`/admin/{admin_id}/system-role`** | `PATCH` | **Alterar Papel (system_role).** Atualiza o `system_role` de um administrador alvo. | Requer autenticação Bearer. A regra é de hierarquia estrita: o solicitante só pode alterar papéis de administradores com papel inferior ao seu e somente para um papel que também seja inferior ao seu. `root` pode alterar qualquer papel, inclusive promover/demover para `root`. |
 
 ---
 
@@ -178,6 +179,18 @@ Estes recursos implementam o CRUD de administradores, respeitando a hierarquia d
 | **`/admin/unlock`** | `GET` | **Consultar Bloqueios do Administrador.** Retorna o estado de bloqueio (`is_blocked_login`, `is_blocked_password`) e tempo de *retry* associado a um `email`. | Exige `system_role` (`root` ou `admin`) suficiente para consulta. |
 | **`/admin/unlock/all`** | `GET` | **Listar Bloqueios Ativos.** Retorna todos os bloqueios temporários de login/senha registrados. | Requer autenticação (geralmente restrito a `root` ou `admin`). |
 | **`/admin/password-recovery`** | `POST` | **Disparar Recuperação (Admin Controlada).** Gera e envia o token de recuperação para o admin informado (Uso interno/suporte). | Requer **autenticação**. Respeita *rate limit*. |
+
+Backlog (próximas entregas)
+
+- Rotas REST:
+  - GET `/admin/{admin_id}` (detalhe), DELETE `/admin/{admin_id}` (remoção com salvaguardas).
+  - PATCH `/admin/email` – altera e‑mail próprio; reinicia verificação e reenvio do código.
+  - GET/POST `/admin/unlock`, GET `/admin/unlock/all` – consulta/remoção de lockouts.
+  - GET `/admin/auth/verify-link`, POST `/admin/auth/verification-code` – verificação por link público e reenvio de código.
+  - POST `/admin/auth/logout`, POST `/admin/auth/logout/all` – revogação de sessões.
+- Infra e UX:
+  - DTO/i18n centralizado para erros/mensagens.
+  - Auditoria e métricas (mudanças sensíveis, contadores de erros/latências).
 ---
 
 ## Atualizações recentes
@@ -191,7 +204,25 @@ Estes recursos implementam o CRUD de administradores, respeitando a hierarquia d
   - `POST /admin` (criar admin): `password` opcional; gera senha de 8 dígitos; envia e-mail com senha, código e link de verificação.
   - `POST /admin/auth/verify-code/{code}` (pública) e `POST /admin/auth/verify` (compat.): ativam a conta ao validar código+senha.
   - `POST /admin/auth/password-recovery` (pública): redefine senha (8 dígitos), invalida verificação e envia código/link para verificação.
+  - `PATCH /admin/password` (autenticada): altera a própria senha; valida senha atual; aplica política de senha; dispara e-mail de confirmação.
+- Política de senha: modo estrito opcional via `PASSWORD_POLICY_STRICT=true` exige maiúscula, minúscula, número e caractere especial; por padrão, mínimo 8.
 - Observabilidade: logs por requisição (método, caminho, status e duração) com `LOG_LEVEL`.
+ - Limites configuráveis por env (usados quando Redis ativo):
+   - `LOGIN_IP_LIMIT` (default 20), `LOGIN_IP_WINDOW_MINUTES` (default 5)
+   - `LOGIN_USER_LIMIT` (default 20), `LOGIN_USER_WINDOW_MINUTES` (default 5)
+   - `LOGIN_FAIL_LOCK_THRESHOLD` (default 5), `LOGIN_FAIL_LOCK_TTL_MINUTES` (default 15)
+   - `RECOVERY_IP_LIMIT` (default 10), `RECOVERY_IP_WINDOW_MINUTES` (default 60)
+   - `RECOVERY_EMAIL_LIMIT` (default 3), `RECOVERY_EMAIL_WINDOW_MINUTES` (default 15)
+   - `VERIFY_CODE_TTL_HOURS` (default 24)
+ - Segurança e Resiliência:
+   - Redis (`REDIS_URL`) para rate limit/lockout (login: IP/usuário; recovery: IP/e‑mail).
+   - Códigos de verificação com `expires_at` (24h) e checagem no uso.
+   - Logs incluem User-Agent e bytes respondidos.
+ - MFA por e‑mail (opcional):
+   - `MFA_EMAIL_ENABLED` (true/false)
+   - `MFA_CODE_TTL_MINUTES` (default 10)
+   - `MFA_CODE_LENGTH` (default 6)
+   - `MFA_MAX_ATTEMPTS` (default 5)
 
 ### `POST /admin/`
 

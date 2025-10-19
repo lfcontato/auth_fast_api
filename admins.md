@@ -59,6 +59,13 @@ Rotas e cURL
     - 400 `AUTH_400_001` JSON inválido
     - 401 `AUTH_401_001` Credenciais inválidas
 
+- MFA por e‑mail (quando habilitado)
+  - Ative com `MFA_EMAIL_ENABLED=true`.
+  - Passo 1: `POST /admin/auth/token` → `202 Accepted` com `{ "mfa_required": true, "mfa_tx": "..." }` e o código é enviado por e‑mail.
+  - Passo 2: `POST /admin/auth/mfa/verify` com `{ "mfa_tx": "...", "code": "123456" }` → `200 OK` com `access_token` e `refresh_token`.
+  - Limites: tentativas por transação (default 5) e expiração do código (default 10 min).
+  - cURL (verificar): `curl -sS -X POST http://localhost:8080/admin/auth/mfa/verify -H 'Content-Type: application/json' -d '{"mfa_tx":"...","code":"123456"}'`
+
 - Refresh de token
   - POST `/admin/auth/token/refresh`
   - Body: `{ "refresh_token": "<REFRESH_TOKEN>" }`
@@ -76,12 +83,19 @@ Rotas e cURL
   - POST `/admin`
   - Auth: `Authorization: Bearer <ACCESS_TOKEN>`
   - Body:
-    - `{ "email": "luis.fernando.pereira.procempa@gmail.com", "username": "luis.fernando.pereira.procempa", "password": "stringst", "system_role": "user" }`
+    - `{
+         "email": "novo@dominio.com",
+         "username": "novo_admin",
+         "password": "SenhaForte123",
+         "system_role": "user",
+         "subscription_plan": "monthly"
+       }`
   - cURL:
-    - `curl -sS -X POST http://localhost:8080/admin -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user"}'`
+    - `curl -sS -X POST http://localhost:8080/admin -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user","subscription_plan":"monthly"}'`
   - Observações:
     - Hierarquia: `guest < user < admin < root` (é preciso ter nível superior ao do alvo).
     - Se `password` for omitida, o sistema gera uma senha de 8 dígitos.
+    - Se `subscription_plan` for omitido, usa `monthly` (root no seed é sempre `lifetime`).
     - Um e‑mail automático é enviado com senha/código/link de verificação.
   - Resposta (201):
     ```json
@@ -152,6 +166,7 @@ Rotas e cURL
     { "success": true, "verified": true }
     ```
   - Possíveis erros: iguais ao endpoint com código na URL
+  - Observação: os códigos expiram em 24h; após isso são inválidos.
 
 - Recuperação de senha (não autenticada)
   - POST `/admin/auth/password-recovery`
@@ -165,6 +180,7 @@ Rotas e cURL
     ```json
     { "success": true, "sent": true }
     ```
+  - Rate limit: por IP (10/h) e por e‑mail (3/15min); se excedido, retorna 429 (AUTH_429_*).
   - Possíveis erros:
     - 400 `AUTH_400_009` JSON inválido
     - 400 `AUTH_400_010` E‑mail é obrigatório
@@ -176,8 +192,89 @@ Rotas e cURL
     - 500 `AUTH_500_012` Falha ao criar código de verificação
     - 500 `AUTH_500_013` Falha ao confirmar recuperação
 
+- Alterar plano (subscription_plan) de um administrador (autenticada)
+  - PATCH `/admin/{admin_id}/subscription-plan`
+  - Headers: `Authorization: Bearer <ACCESS_TOKEN>`
+  - Corpo:
+    - `{ "subscription_plan": "minute|hourly|daily|trial|monthly|semiannual|annual|lifetime" }`
+  - Regras:
+    - `root` pode definir qualquer plano.
+    - Demais administradores: até `semiannual` (inclusive).
+    - O campo `expires_at` é recalculado automaticamente conforme o plano (ver regras em HOWTOUSE.md).
+  - cURL:
+    - `curl -sS -X PATCH http://localhost:8080/admin/2/subscription-plan -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"subscription_plan":"semiannual"}'`
+  - Respostas esperadas:
+    - 200 OK: `{ "success": true, "admin_id": 2, "new_plan": "semiannual" }`
+  - Exemplo de cálculo de expiração (agora = `2025-10-19T12:00:00Z`):
+    - `semiannual` → `expires_at = 2026-04-19T12:00:00Z`
+    - `monthly` → `expires_at = 2025-11-19T12:00:00Z`
+    - `lifetime` → `expires_at = null`
+    - 400 `AUTH_400_021` Plano inválido/ausente
+    - 401 `AUTH_401_005` Token ausente/inválido
+    - 403 `AUTH_403_010/011` Permissão insuficiente
+    - 404 `AUTH_404_002` Admin alvo não encontrado
+
+- Alterar papel (system_role) de um administrador (autenticada)
+  - PATCH `/admin/{admin_id}/system-role`
+  - Headers: `Authorization: Bearer <ACCESS_TOKEN>`
+  - Corpo:
+    - `{ "system_role": "user|admin|root|guest" }`
+  - Regras de hierarquia:
+    - Você só pode alterar o papel de administradores com `system_role` estritamente inferior ao seu.
+    - O novo `system_role` também deve ser estritamente inferior ao seu papel atual.
+    - `root` pode alterar qualquer papel (inclusive promover/demover para `root`).
+  - cURL:
+    - `curl -sS -X PATCH http://localhost:8080/admin/2/system-role -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"system_role":"admin"}'`
+  - Respostas esperadas:
+    - 200 OK: `{ "success": true, "admin_id": 2, "old_role": "user", "new_role": "admin" }`
+    - 400 `AUTH_400_020` JSON inválido/valor de papel inválido
+    - 401 `AUTH_401_005` Token ausente/inválido
+    - 403 `AUTH_403_010` Papel insuficiente para alterar este alvo/novo papel
+    - 404 `AUTH_404_002` Admin alvo não encontrado
+
+- Alterar senha própria (autenticada)
+  - PATCH `/admin/password`
+  - Headers: `Authorization: Bearer <ACCESS_TOKEN>`
+  - Body:
+    - `{ "current_password": "<senha_atual>", "new_password": "<nova_senha>" }`
+  - Política de senha:
+    - Mínimo 8 caracteres por padrão.
+    - Quando `PASSWORD_POLICY_STRICT=true`, exige maiúscula, minúscula, número e caractere especial.
+  - cURL:
+    - `curl -sS -X PATCH http://localhost:8080/admin/password -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"current_password":"stringst","new_password":"NovaSenha@123"}'`
+  - Respostas esperadas:
+    - 200 OK: `{ "success": true }`
+    - 400 `AUTH_400_030/031` JSON inválido/campos ausentes; `AUTH_400_005` senha nova fora da política
+    - 401 `AUTH_401_005/006` não autorizado/senha atual inválida
+    - 404 `AUTH_404_001` admin não encontrado
+    - 500 `AUTH_500_030/031` falha ao processar/atualizar
+
 Notas importantes
 
 - Base de URL nos e‑mails: se `PUBLIC_BASE_URL` estiver definido, ele é usado; caso contrário, a API deduz a base a partir dos cabeçalhos da requisição (`X-Forwarded-Proto`/`X-Forwarded-Host` ou `Host`). Isso torna o deploy portátil em qualquer hospedagem/reverso.
 - O tamanho do código de verificação é definido em `internal/contants/contants.go` (`VerificationCodeLength`, padrão 64).
 - Após verificação bem‑sucedida, `admins.is_verified` = 1 e o código é consumido.
+
+Backlog de rotas (a implementar)
+
+- Detalhar administrador
+  - GET `/admin/{admin_id}` – retorna dados do admin alvo (requer hierarquia superior).
+- Remover administrador
+  - DELETE `/admin/{admin_id}` – impede autoexclusão e exclusão de superiores; exige hierarquia superior.
+- Alterar e‑mail próprio
+  - PATCH `/admin/email` – altera e‑mail do admin autenticado; reinicia verificação e dispara novo código.
+- Bloqueios/segurança (administração)
+  - GET/POST `/admin/unlock` – consulta e remove bloqueios por tentativas.
+  - GET `/admin/unlock/all` – lista bloqueios ativos.
+- Verificação via link público e reenvio
+  - GET `/admin/auth/verify-link` – confirmação via link público (login + code).
+  - POST `/admin/auth/verification-code` – reenvio de código (com limite de frequência).
+- Sessões
+  - POST `/admin/auth/logout` – revoga a sessão atual.
+  - POST `/admin/auth/logout/all` – revoga todas as sessões do admin.
+
+Melhorias planejadas
+
+- DTO/i18n para mensagens e códigos de erro padronizados (pt-BR/en-US).
+- Auditoria de segurança: registrar mudanças de papel/plano e trocas de senha.
+- CORS e headers de segurança quando integrando com frontends.

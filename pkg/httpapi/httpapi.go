@@ -4,25 +4,28 @@
 package httpapi
 
 import (
-	"context"
-	crand "crypto/rand"
-	"database/sql"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"log"
-	"math/big"
-	"net/http"
-	"os"
-	"strconv"
-	"strings"
-	"time"
+    "context"
+    crand "crypto/rand"
+    "database/sql"
+    "encoding/hex"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "log"
+    "math/big"
+    "net/http"
+    "os"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/joho/godotenv"
+    "github.com/golang-jwt/jwt/v5"
+    "github.com/joho/godotenv"
+    "github.com/google/uuid"
 	"github.com/lfcontato/auth_fast_api/internal/config"
 	"github.com/lfcontato/auth_fast_api/internal/contants"
 	"github.com/lfcontato/auth_fast_api/internal/db"
+	"github.com/lfcontato/auth_fast_api/internal/kv"
 	authsvc "github.com/lfcontato/auth_fast_api/internal/services/auth"
 	emailsvc "github.com/lfcontato/auth_fast_api/internal/services/email"
 	"golang.org/x/crypto/bcrypt"
@@ -63,6 +66,12 @@ func adminAuthTokenHandler(w http.ResponseWriter, r *http.Request) {
         writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
         return
     }
+    // Rate limit + lockout
+    ip := clientIP(r)
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:login:ip:"+ip, int64(cfg.LoginIPLimit), time.Duration(cfg.LoginIPWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas tentativas. Tente mais tarde."})
+        return
+    }
     var req struct {
         Username string `json:"username"`
         Password string `json:"password"`
@@ -71,14 +80,62 @@ func adminAuthTokenHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_001", "message": "JSON inválido"})
 		return
 	}
-	access, refresh, err := service.Login(r.Context(), req.Username, req.Password)
-	if err != nil {
-		logWarn("login failed for '%s': %v", req.Username, err)
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_001", "message": err.Error()})
-		return
-	}
-	logInfo("login success for '%s'", req.Username)
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "access_token": access, "refresh_token": refresh})
+    uname := strings.ToLower(strings.TrimSpace(req.Username))
+    if locked, _ := kv.IsLocked(r.Context(), "lock:login:user:"+uname); locked {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_LOCK", "message": "Conta temporariamente bloqueada."})
+        return
+    }
+    access, refresh, err := service.Login(r.Context(), uname, req.Password)
+    if err != nil {
+        logWarn("login failed for '%s': %v", req.Username, err)
+        // incrementa falhas e possivelmente aplica lock
+        if ok, n, _ := kv.AllowRate(r.Context(), "rl:loginfail:user:"+uname, int64(cfg.LoginFailLockThreshold), time.Duration(cfg.LoginFailLockTTLMinutes)*time.Minute); !ok || n >= int64(cfg.LoginFailLockThreshold) {
+            _ = kv.SetLock(r.Context(), "lock:login:user:"+uname, time.Duration(cfg.LoginFailLockTTLMinutes)*time.Minute)
+        }
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_001", "message": err.Error()})
+        return
+    }
+    logInfo("login success for '%s'", req.Username)
+    // reset counters em caso de sucesso
+    kv.Del(r.Context(), "rl:loginfail:user:"+uname, "lock:login:user:"+uname)
+
+    // MFA por e-mail: se habilitado, envia código e segura os tokens no Redis até verificação
+    if cfg.MFAEmailEnabled {
+        var (
+            adminID int64
+            email   string
+        )
+        if err := sqldb.QueryRow(db.Rebind(`SELECT id, email FROM admins WHERE username = ? LIMIT 1`), uname).Scan(&adminID, &email); err != nil {
+            writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_MFA", "message": "Falha ao preparar MFA"})
+            return
+        }
+        tx := uuid.NewString()
+        code := generateNumericCode(cfg.MFACodeLength)
+        ttl := time.Duration(cfg.MFACodeTTLMinutes) * time.Minute
+        // Persistir tokens e código no Redis
+        _ = kv.Set(r.Context(), "mfa:tx:"+tx, fmt.Sprintf(`{"access":"%s","refresh":"%s"}`, access, refresh), ttl)
+        _ = kv.Set(r.Context(), "mfa:code:"+tx, code, ttl)
+        // Enviar e-mail
+        if mailer != nil {
+            tmpl := cfg.SecurityTemplate
+            if strings.TrimSpace(tmpl) == "" { tmpl = cfg.EmailTemplateName }
+            data := map[string]any{
+                "Title":   "Código de verificação (MFA)",
+                "Message": "Use o código abaixo para concluir seu login.",
+                "Email":   email,
+                "Username": uname,
+                "Code":    code,
+                "Time":    time.Now().UTC().Format(time.RFC3339),
+            }
+            ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+            defer cancel()
+            _ = mailer.Send(ctx, emailsvc.Params{To: []string{email}, Subject: "Seu código de MFA", TemplateName: tmpl, Data: data})
+        }
+        writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "mfa_required": true, "mfa_tx": tx})
+        return
+    }
+
+    writeJSON(w, http.StatusOK, map[string]any{"success": true, "access_token": access, "refresh_token": refresh})
 }
 
 // adminAuthRefreshHandler é um stub do endpoint de refresh /admin/auth/token/refresh.
@@ -101,12 +158,58 @@ func adminAuthRefreshHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "access_token": access, "refresh_token": refresh})
 }
 
+// adminAuthMFAVerifyHandler valida o código de MFA enviado ao e-mail e retorna os tokens retidos.
+func adminAuthMFAVerifyHandler(w http.ResponseWriter, r *http.Request) {
+    var req struct{
+        Tx   string `json:"mfa_tx"`
+        Code string `json:"code"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Tx) == "" || strings.TrimSpace(req.Code) == "" {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_MFA", "message": "JSON inválido"})
+        return
+    }
+    // Tenta limitar tentativas por TX
+    attemptsKey := "mfa:attempts:" + req.Tx
+    if ok, n, _ := kv.AllowRate(r.Context(), attemptsKey, int64(cfg.MFAMaxAttempts), time.Duration(cfg.MFACodeTTLMinutes)*time.Minute); !ok {
+        // estoura tentativas: limpa TX para segurança
+        kv.Del(r.Context(), "mfa:tx:"+req.Tx, "mfa:code:"+req.Tx)
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_MFA", "message": "Muitas tentativas"})
+        return
+    } else { _ = n }
+    stored, _ := kv.Get(r.Context(), "mfa:code:"+req.Tx)
+    if strings.TrimSpace(stored) == "" || stored != strings.TrimSpace(req.Code) {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_MFA", "message": "Código inválido ou expirado"})
+        return
+    }
+    data, _ := kv.Get(r.Context(), "mfa:tx:"+req.Tx)
+    if strings.TrimSpace(data) == "" {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_MFA", "message": "Sessão MFA expirada"})
+        return
+    }
+    // Limpa chaves
+    kv.Del(r.Context(), "mfa:tx:"+req.Tx, "mfa:code:"+req.Tx, attemptsKey)
+    // Retorna os tokens
+    var resp map[string]any
+    _ = json.Unmarshal([]byte(data), &resp)
+    if resp == nil { resp = map[string]any{} }
+    resp["success"] = true
+    writeJSON(w, http.StatusOK, resp)
+}
+
+func generateNumericCode(n int) string { return generateNumericPassword(n) }
+
 // adminAuthPasswordRecoveryHandler permite a recuperação de senha sem autenticação.
 // Recebe um e-mail, gera uma nova senha e um novo código de verificação e os envia por e-mail.
 func adminAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email string `json:"email"`
-	}
+    // Throttle por IP e por e-mail
+    ip := clientIP(r)
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:recovery:ip:"+ip, int64(cfg.RecoveryIPLimit), time.Duration(cfg.RecoveryIPWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas solicitações. Tente mais tarde."})
+        return
+    }
+    var req struct {
+        Email string `json:"email"`
+    }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_009", "message": "JSON inválido"})
 		return
@@ -116,6 +219,10 @@ func adminAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_010", "message": "E-mail é obrigatório"})
 		return
 	}
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:recovery:email:"+req.Email, int64(cfg.RecoveryEmailLimit), time.Duration(cfg.RecoveryEmailWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_EMAIL", "message": "Limite de recuperação excedido. Tente mais tarde."})
+        return
+    }
 
 	// Busca admin por e-mail. Em caso de não encontrado, retornamos sucesso para evitar enumeração.
 	var (
@@ -133,10 +240,12 @@ func adminAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gera nova senha e atualiza hash
-	newPass := generateNumericPassword(contants.DefaultGeneratedPasswordLength)
-	if newPass == "" {
-		newPass = generateNumericPassword(8)
+	// Gera nova senha conforme política e atualiza hash
+	newPass := ""
+	if passwordPolicyStrict() {
+		newPass = generateStrongPassword(12)
+	} else {
+		newPass = generateNumericPassword(contants.DefaultGeneratedPasswordLength)
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
 	if err != nil {
@@ -163,10 +272,10 @@ func adminAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_011", "message": "Falha ao atualizar senha"})
 		return
 	}
-	if _, err := tx.Exec(db.Rebind(`INSERT INTO admins_verifications (admin_id, code) VALUES (?, ?)`), adminID, code); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_012", "message": "Falha ao criar código de verificação"})
-		return
-	}
+    if _, err := tx.Exec(db.Rebind(`INSERT INTO admins_verifications (admin_id, code, expires_at) VALUES (?, ?, ?)`), adminID, code, time.Now().Add(24*time.Hour)); err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_012", "message": "Falha ao criar código de verificação"})
+        return
+    }
 	if err := tx.Commit(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_013", "message": "Falha ao confirmar recuperação"})
 		return
@@ -323,12 +432,13 @@ func adminCreateHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_003", "message": err.Error()})
 		return
 	}
-	var req struct {
-		Email      string `json:"email"`
-		Username   string `json:"username"`
-		Password   string `json:"password"`
-		SystemRole string `json:"system_role"`
-	}
+    var req struct {
+        Email            string `json:"email"`
+        Username         string `json:"username"`
+        Password         string `json:"password"`
+        SystemRole       string `json:"system_role"`
+        SubscriptionPlan string `json:"subscription_plan"`
+    }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_003", "message": "JSON inválido"})
 		return
@@ -340,18 +450,41 @@ func adminCreateHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_004", "message": "Campos obrigatórios ausentes"})
 		return
 	}
-	// Senha opcional: gera automaticamente se vazia. Caso informada, valida tamanho mínimo.
+	// Política de senha: se vazia, gera automática; se informada, valida.
 	req.Password = strings.TrimSpace(req.Password)
 	if req.Password == "" {
-		req.Password = generateNumericPassword(contants.DefaultGeneratedPasswordLength)
-	} else if len(req.Password) < contants.DefaultGeneratedPasswordLength {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_005", "message": "Senha deve ter pelo menos 8 caracteres"})
-		return
+		if passwordPolicyStrict() {
+			req.Password = generateStrongPassword(12)
+		} else {
+			req.Password = generateNumericPassword(contants.DefaultGeneratedPasswordLength)
+		}
+	} else {
+		if err := validatePassword(req.Password); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_005", "message": err.Error()})
+			return
+		}
 	}
-	if !canManageSystemRole(actingRole, req.SystemRole) {
-		writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_001", "message": "Papel insuficiente para criar este administrador"})
-		return
-	}
+    if !canManageSystemRole(actingRole, req.SystemRole) {
+        writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_001", "message": "Papel insuficiente para criar este administrador"})
+        return
+    }
+    // Plano de assinatura
+    plan := strings.ToLower(strings.TrimSpace(req.SubscriptionPlan))
+    if plan == "" { plan = "monthly" }
+    if !isValidPlan(plan) {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_021", "message": "subscription_plan inválido"})
+        return
+    }
+    // Somente root pode conceder planos acima de semiannual
+    if strings.ToLower(actingRole) != "root" && !canGrantPlan(plan) {
+        writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_011", "message": "Papel insuficiente para conceder este plano"})
+        return
+    }
+    var expires any = nil
+    if plan != "lifetime" {
+        e := computeExpires(plan, time.Now())
+        expires = e
+    }
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_001", "message": "Falha ao processar senha"})
@@ -363,32 +496,33 @@ func adminCreateHandler(w http.ResponseWriter, r *http.Request) {
 		ownerID = actingID
 	}
 	var newID int64
-	if db.IsPostgres() {
-		// Postgres requer RETURNING para obter o id
-		q := db.Rebind(`INSERT INTO admins (email, username, password_hash, system_role, is_verified, owner_id) VALUES (?,?,?,?,?,?) RETURNING id`)
-		if err := sqldb.QueryRow(q, req.Email, req.Username, string(hash), req.SystemRole, false, ownerID).Scan(&newID); err != nil {
-			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "code": "AUTH_409_001", "message": "Email ou username já existente"})
-			return
-		}
-	} else {
-		res, err := sqldb.Exec(db.Rebind(`INSERT INTO admins (email, username, password_hash, system_role, is_verified, owner_id) VALUES (?,?,?,?,?,?)`), req.Email, req.Username, string(hash), req.SystemRole, false, ownerID)
-		if err != nil {
-			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "code": "AUTH_409_001", "message": "Email ou username já existente"})
-			return
-		}
-		newID, _ = res.LastInsertId()
-	}
+    if db.IsPostgres() {
+        // Postgres requer RETURNING para obter o id
+        q := db.Rebind(`INSERT INTO admins (email, username, password_hash, system_role, subscription_plan, expires_at, is_verified, owner_id) VALUES (?,?,?,?,?,?,?,?) RETURNING id`)
+        if err := sqldb.QueryRow(q, req.Email, req.Username, string(hash), req.SystemRole, plan, expires, false, ownerID).Scan(&newID); err != nil {
+            writeJSON(w, http.StatusConflict, map[string]any{"success": false, "code": "AUTH_409_001", "message": "Email ou username já existente"})
+            return
+        }
+    } else {
+        res, err := sqldb.Exec(db.Rebind(`INSERT INTO admins (email, username, password_hash, system_role, subscription_plan, expires_at, is_verified, owner_id) VALUES (?,?,?,?,?,?,?,?)`), req.Email, req.Username, string(hash), req.SystemRole, plan, expires, false, ownerID)
+        if err != nil {
+            writeJSON(w, http.StatusConflict, map[string]any{"success": false, "code": "AUTH_409_001", "message": "Email ou username já existente"})
+            return
+        }
+        newID, _ = res.LastInsertId()
+    }
 
-	// Gera código de verificação único e persiste
-	code, err := generateVerificationCode(contants.VerificationCodeLength)
-	if err == nil {
-		if _, e := sqldb.Exec(db.Rebind(`INSERT INTO admins_verifications (admin_id, code) VALUES (?,?)`), newID, code); e != nil {
-			logWarn("save verification code failed: %v", e)
-		}
-	} else {
-		logWarn("generate verification code failed: %v", err)
-		code = ""
-	}
+    // Gera código de verificação único e persiste
+    code, err := generateVerificationCode(contants.VerificationCodeLength)
+    if err == nil {
+        exp := time.Now().Add(24 * time.Hour)
+        if _, e := sqldb.Exec(db.Rebind(`INSERT INTO admins_verifications (admin_id, code, expires_at) VALUES (?,?,?)`), newID, code, exp); e != nil {
+            logWarn("save verification code failed: %v", e)
+        }
+    } else {
+        logWarn("generate verification code failed: %v", err)
+        code = ""
+    }
 
     // Envia e-mail de criação (síncrono em serverless, assíncrono em servidor local).
     if mailer != nil {
@@ -428,8 +562,46 @@ func adminCreateHandler(w http.ResponseWriter, r *http.Request) {
 		"admin_id":    newID,
 		"username":    req.Username,
 		"email":       req.Email,
-		"system_role": req.SystemRole,
-	})
+        "system_role": req.SystemRole,
+        "subscription_plan": plan,
+        "expires_at": expires,
+    })
+}
+
+// Subscription plan helpers
+func isValidPlan(plan string) bool {
+    switch strings.ToLower(plan) {
+    case "minute", "hourly", "daily", "trial", "monthly", "semiannual", "annual", "lifetime":
+        return true
+    }
+    return false
+}
+
+// Non-root can only grant up to semiannual (inclusive)
+func canGrantPlan(plan string) bool {
+    allowed := map[string]bool{"minute": true, "hourly": true, "daily": true, "trial": true, "monthly": true, "semiannual": true}
+    return allowed[strings.ToLower(plan)]
+}
+
+func computeExpires(plan string, now time.Time) time.Time {
+    switch strings.ToLower(strings.TrimSpace(plan)) {
+    case "annual":
+        return now.AddDate(1, 0, 0)
+    case "semiannual":
+        return now.AddDate(0, 6, 0)
+    case "monthly":
+        return now.AddDate(0, 1, 0)
+    case "trial":
+        return now.AddDate(0, 0, 7)
+    case "daily":
+        return now.AddDate(0, 0, 1)
+    case "hourly":
+        return now.Add(time.Hour)
+    case "minute":
+        return now.Add(5 * time.Minute)
+    default:
+        return now
+    }
 }
 
 // adminAuthVerifyHandler confirma a conta de admin a partir de um código e senha.
@@ -457,11 +629,11 @@ func adminAuthVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		isVerified bool
 		verifID    int64
 	)
-	err := sqldb.QueryRow(db.Rebind(`
+    err := sqldb.QueryRow(db.Rebind(`
         SELECT a.id, a.password_hash, a.is_verified, v.id
         FROM admins_verifications v
         JOIN admins a ON a.id = v.admin_id
-        WHERE v.code = ? AND v.consumed_at IS NULL
+        WHERE v.code = ? AND v.consumed_at IS NULL AND (v.expires_at IS NULL OR v.expires_at > CURRENT_TIMESTAMP)
         LIMIT 1
     `), req.Code).Scan(&adminID, &passHash, &isVerified, &verifID)
 	if err != nil {
@@ -495,6 +667,201 @@ func adminAuthVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "verified": true})
 }
 
+// adminUpdateSubscriptionPlanHandler atualiza o subscription_plan do admin alvo, respeitando hierarquia e limites.
+func adminUpdateSubscriptionPlanHandler(w http.ResponseWriter, r *http.Request) {
+    // URL esperada: /admin/{id}/subscription-plan
+    parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+    if len(parts) < 3 { writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "code": "HTTP_404"}); return }
+    idStr := parts[1]
+    targetID, err := strconv.ParseInt(idStr, 10, 64)
+    if err != nil || targetID <= 0 {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_022", "message": "admin_id inválido"})
+        return
+    }
+    _, actingRole, err := authenticateAdmin(r)
+    if err != nil {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_005", "message": err.Error()})
+        return
+    }
+    var req struct{ SubscriptionPlan string `json:"subscription_plan"` }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.SubscriptionPlan) == "" {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_021", "message": "subscription_plan inválido"})
+        return
+    }
+    newPlan := strings.ToLower(strings.TrimSpace(req.SubscriptionPlan))
+    if !isValidPlan(newPlan) {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_021", "message": "subscription_plan inválido"})
+        return
+    }
+    // Busca target para conferir hierarquia e papel
+    var targetRole string
+    err = sqldb.QueryRow(db.Rebind(`SELECT system_role FROM admins WHERE id = ? LIMIT 1`), targetID).Scan(&targetRole)
+    if err == sql.ErrNoRows {
+        writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "code": "AUTH_404_002", "message": "Admin não encontrado"})
+        return
+    }
+    if err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_020", "message": "Falha ao buscar admin"})
+        return
+    }
+    // Hierarquia: somente alterar inferiores; root pode todos
+    if strings.ToLower(actingRole) != "root" {
+        if !canManageSystemRole(actingRole, targetRole) {
+            writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_010", "message": "Papel insuficiente para alterar este administrador"})
+            return
+        }
+        if !canGrantPlan(newPlan) {
+            writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_011", "message": "Papel insuficiente para conceder este plano"})
+            return
+        }
+    }
+    var expires any = nil
+    if newPlan != "lifetime" {
+        e := computeExpires(newPlan, time.Now())
+        expires = e
+    }
+    if _, err := sqldb.Exec(db.Rebind(`UPDATE admins SET subscription_plan = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`), newPlan, expires, targetID); err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_021", "message": "Falha ao atualizar plano"})
+        return
+    }
+    writeJSON(w, http.StatusOK, map[string]any{"success": true, "admin_id": targetID, "new_plan": newPlan})
+}
+
+// adminUpdateSystemRoleHandler atualiza o system_role do admin alvo respeitando hierarquia.
+func adminUpdateSystemRoleHandler(w http.ResponseWriter, r *http.Request) {
+    // URL esperada: /admin/{id}/system-role
+    parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+    if len(parts) < 3 { writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "code": "HTTP_404"}); return }
+    idStr := parts[1]
+    targetID, err := strconv.ParseInt(idStr, 10, 64)
+    if err != nil || targetID <= 0 {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_023", "message": "admin_id inválido"})
+        return
+    }
+    _, actingRole, err := authenticateAdmin(r)
+    if err != nil {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_005", "message": err.Error()})
+        return
+    }
+    var req struct{ SystemRole string `json:"system_role"` }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_024", "message": "JSON inválido"})
+        return
+    }
+    newRole := strings.ToLower(strings.TrimSpace(req.SystemRole))
+    if !isValidSystemRole(newRole) {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_025", "message": "system_role inválido"})
+        return
+    }
+    var oldRole string
+    if err := sqldb.QueryRow(db.Rebind(`SELECT system_role FROM admins WHERE id = ? LIMIT 1`), targetID).Scan(&oldRole); err != nil {
+        if err == sql.ErrNoRows {
+            writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "code": "AUTH_404_002", "message": "Admin não encontrado"})
+            return
+        }
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_022", "message": "Falha ao carregar admin"})
+        return
+    }
+
+    // Regras de hierarquia: acting deve ser estritamente superior ao alvo e ao novo papel (exceto root, que pode todos)
+    if strings.ToLower(actingRole) != "root" {
+        if !canManageSystemRole(actingRole, oldRole) {
+            writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_010", "message": "Papel insuficiente para alterar este administrador"})
+            return
+        }
+        if !canManageSystemRole(actingRole, newRole) {
+            writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_012", "message": "Papel insuficiente para definir o novo system_role"})
+            return
+        }
+    }
+
+    if _, err := sqldb.Exec(db.Rebind(`UPDATE admins SET system_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`), newRole, targetID); err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_023", "message": "Falha ao atualizar system_role"})
+        return
+    }
+    writeJSON(w, http.StatusOK, map[string]any{"success": true, "admin_id": targetID, "old_role": oldRole, "new_role": newRole})
+}
+
+func isValidSystemRole(role string) bool {
+    switch strings.ToLower(strings.TrimSpace(role)) {
+    case "guest", "user", "admin", "root":
+        return true
+    }
+    return false
+}
+
+// adminChangeOwnPasswordHandler permite ao admin autenticado alterar sua própria senha.
+// Requer o password atual e o novo; aplica a política de senha (modo estrito opcional).
+func adminChangeOwnPasswordHandler(w http.ResponseWriter, r *http.Request) {
+    actingID, _, err := authenticateAdmin(r)
+    if err != nil || actingID <= 0 {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_005", "message": "não autorizado"})
+        return
+    }
+    var req struct{
+        CurrentPassword string `json:"current_password"`
+        NewPassword     string `json:"new_password"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_030", "message": "JSON inválido"})
+        return
+    }
+    req.CurrentPassword = strings.TrimSpace(req.CurrentPassword)
+    req.NewPassword = strings.TrimSpace(req.NewPassword)
+    if req.CurrentPassword == "" || req.NewPassword == "" {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_031", "message": "Campos obrigatórios ausentes"})
+        return
+    }
+    if err := validatePassword(req.NewPassword); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_005", "message": err.Error()})
+        return
+    }
+    var (
+        email string
+        username string
+        passHash string
+    )
+    if err := sqldb.QueryRow(db.Rebind(`SELECT email, username, password_hash FROM admins WHERE id = ? LIMIT 1`), actingID).Scan(&email, &username, &passHash); err != nil {
+        writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "code": "AUTH_404_001", "message": "Administrador não encontrado"})
+        return
+    }
+    if bcrypt.CompareHashAndPassword([]byte(passHash), []byte(req.CurrentPassword)) != nil {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_006", "message": "Senha atual inválida"})
+        return
+    }
+    newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+    if err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_030", "message": "Falha ao processar nova senha"})
+        return
+    }
+    if _, err := sqldb.Exec(db.Rebind(`UPDATE admins SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`), string(newHash), actingID); err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_031", "message": "Falha ao atualizar senha"})
+        return
+    }
+    // E-mail de confirmação (melhor esforço)
+    if mailer != nil {
+        tmpl := cfg.SecurityTemplate
+        if strings.TrimSpace(tmpl) == "" { tmpl = cfg.EmailTemplateName }
+        data := map[string]any{
+            "Title":   "Senha alterada",
+            "Message": "Sua senha foi alterada com sucesso.",
+            "Event":   "password_changed",
+            "Email":   email,
+            "Username": username,
+            "Time":    time.Now().UTC().Format(time.RFC3339),
+        }
+        ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+        defer cancel()
+        params := emailsvc.Params{To: []string{email}, Subject: "Confirmação de alteração de senha", TemplateName: tmpl, Data: data}
+        if os.Getenv("VERCEL") != "" || os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+            _ = mailer.Send(ctx, params)
+        } else {
+            go func() { _ = mailer.Send(ctx, params) }()
+        }
+    }
+    writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
 // adminAuthVerifyCodeURLHandler confirma a conta recebendo o código na URL e senha no corpo.
 func adminAuthVerifyCodeURLHandler(w http.ResponseWriter, r *http.Request, code string) {
 	var req struct {
@@ -517,11 +884,11 @@ func adminAuthVerifyCodeURLHandler(w http.ResponseWriter, r *http.Request, code 
 		isVerified bool
 		verifID    int64
 	)
-	err := sqldb.QueryRow(db.Rebind(`
+    err := sqldb.QueryRow(db.Rebind(`
         SELECT a.id, a.password_hash, a.is_verified, v.id
         FROM admins_verifications v
         JOIN admins a ON a.id = v.admin_id
-        WHERE v.code = ? AND v.consumed_at IS NULL
+        WHERE v.code = ? AND v.consumed_at IS NULL AND (v.expires_at IS NULL OR v.expires_at > CURRENT_TIMESTAMP)
         LIMIT 1
     `), code).Scan(&adminID, &passHash, &isVerified, &verifID)
 	if err != nil {
@@ -556,13 +923,14 @@ func adminAuthVerifyCodeURLHandler(w http.ResponseWriter, r *http.Request, code 
 // Handler é o ponto de entrada exigido pelo runtime Go da Vercel.
 // Ele roteia as requisições por caminho e método, delegando para handlers específicos.
 func Handler(w http.ResponseWriter, r *http.Request) {
-	// Request logging (método, caminho, status, duração)
-	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-	start := time.Now()
-	defer func() {
-		dur := time.Since(start)
-		logInfo("%s %s -> %d (%s)", r.Method, r.URL.Path, sw.status, dur.String())
-	}()
+    // Request logging (método, caminho, status, duração, UA, bytes)
+    sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+    start := time.Now()
+    defer func() {
+        dur := time.Since(start)
+        ua := strings.TrimSpace(r.Header.Get("User-Agent"))
+        logInfo("%s %s -> %d (%s) ua=%q bytes=%d", r.Method, r.URL.Path, sw.status, dur.String(), ua, sw.nbytes)
+    }()
 	w = sw
 	path := r.URL.Path
 
@@ -579,9 +947,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		adminAuthTokenHandler(w, r)
 		return
 
-	case path == "/admin/auth/token/refresh" && r.Method == http.MethodPost:
-		adminAuthRefreshHandler(w, r)
-		return
+    case path == "/admin/auth/token/refresh" && r.Method == http.MethodPost:
+        adminAuthRefreshHandler(w, r)
+        return
+
+    case path == "/admin/auth/mfa/verify" && r.Method == http.MethodPost:
+        adminAuthMFAVerifyHandler(w, r)
+        return
 
 	case path == "/admin/auth/password-recovery" && r.Method == http.MethodPost:
 		adminAuthPasswordRecoveryHandler(w, r)
@@ -600,9 +972,21 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		adminCreateHandler(w, r)
 		return
 
-	case (path == "/admin" || path == "/admin/") && r.Method == http.MethodGet:
-		adminListHandler(w, r)
-		return
+    case (path == "/admin" || path == "/admin/") && r.Method == http.MethodGet:
+        adminListHandler(w, r)
+        return
+
+    case strings.HasPrefix(path, "/admin/") && strings.HasSuffix(path, "/subscription-plan") && r.Method == http.MethodPatch:
+        adminUpdateSubscriptionPlanHandler(w, r)
+        return
+
+    case strings.HasPrefix(path, "/admin/") && strings.HasSuffix(path, "/system-role") && r.Method == http.MethodPatch:
+        adminUpdateSystemRoleHandler(w, r)
+        return
+
+    case path == "/admin/password" && r.Method == http.MethodPatch:
+        adminChangeOwnPasswordHandler(w, r)
+        return
 
 	// Compatibilidade com rewrites que possam incluir prefixo /api
 	case strings.HasPrefix(path, "/api/"):
@@ -667,12 +1051,16 @@ func init() {
 	accessTTL := parseIntEnv("TOKEN_ACCESS_EXPIRE_SECONDS", 1800)
 	refreshTTL := parseIntEnv("TOKEN_REFRESH_EXPIRE_SECONDS", 2592000)
 	service = authsvc.New(sqldb, cfg.SecretKey, timeSeconds(accessTTL), timeSeconds(refreshTTL))
-	// E-mail service
-	mailer = emailsvc.FromConfig(cfg)
-	if mailer == nil {
-		logInfo("email disabled: missing EMAIL_SERVER_SMTP_HOST; skipping mail send")
-	}
-	inited = true
+    // E-mail service
+    mailer = emailsvc.FromConfig(cfg)
+    if mailer == nil {
+        logInfo("email disabled: missing EMAIL_SERVER_SMTP_HOST; skipping mail send")
+    }
+    // Redis init (rate limit / lockout)
+    if err := kv.Init(os.Getenv("REDIS_URL"), cfg.RedisHost, cfg.RedisPort, cfg.RedisPass, cfg.RedisTLS); err != nil {
+        logWarn("redis init failed: %v", err)
+    }
+    inited = true
 }
 
 // seedRootAdmin cria o usuário root se não existir.
@@ -698,14 +1086,14 @@ func seedRootAdmin(sqldb *sql.DB) {
 			}
 		}
 		return
-	case sql.ErrNoRows:
-		// create new active root user
-		hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
-		// create verified root user
-		if _, e := sqldb.Exec(db.Rebind(`INSERT INTO admins (email, username, password_hash, system_role, is_verified) VALUES (?,?,?,?,?)`), email, user, string(hash), "root", true); e != nil {
-			log.Printf("seed root admin failed: %v", e)
-		}
-		return
+    case sql.ErrNoRows:
+        // create new active root user
+        hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+        // create verified root user with lifetime plan
+        if _, e := sqldb.Exec(db.Rebind(`INSERT INTO admins (email, username, password_hash, system_role, subscription_plan, expires_at, is_verified) VALUES (?,?,?,?,?,?,?)`), email, user, string(hash), "root", "lifetime", nil, true); e != nil {
+            log.Printf("seed root admin failed: %v", e)
+        }
+        return
 	default:
 		log.Printf("seed root admin select failed: %v", err)
 		return
@@ -861,6 +1249,71 @@ func generateVerificationCode(length int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// passwordPolicyStrict ativa validação de complexidade quando PASSWORD_POLICY_STRICT=true/1
+func passwordPolicyStrict() bool {
+    v := strings.TrimSpace(strings.ToLower(os.Getenv("PASSWORD_POLICY_STRICT")))
+    return v == "true" || v == "1" || v == "yes"
+}
+
+// validatePassword aplica política mínima (>=8) e, se estrita, requer classes: minúscula, maiúscula, dígito e especial.
+func validatePassword(pw string) error {
+    if len(pw) < contants.DefaultGeneratedPasswordLength {
+        return errors.New("Senha deve ter pelo menos 8 caracteres")
+    }
+    if !passwordPolicyStrict() {
+        return nil
+    }
+    hasLower, hasUpper, hasDigit, hasSpecial := false, false, false, false
+    for _, r := range pw {
+        switch {
+        case r >= 'a' && r <= 'z':
+            hasLower = true
+        case r >= 'A' && r <= 'Z':
+            hasUpper = true
+        case r >= '0' && r <= '9':
+            hasDigit = true
+        default:
+            hasSpecial = true
+        }
+    }
+    if hasLower && hasUpper && hasDigit && hasSpecial {
+        return nil
+    }
+    return errors.New("Senha deve conter maiúscula, minúscula, número e caractere especial")
+}
+
+// generateStrongPassword cria uma senha aleatória garantindo presença de classes.
+func generateStrongPassword(n int) string {
+    if n < 8 { n = 12 }
+    lower := []rune("abcdefghijklmnopqrstuvwxyz")
+    upper := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    digits := []rune("0123456789")
+    special := []rune("!@#$%^&*()-_=+[]{};:,.?/|~")
+    all := append(append(append(lower, upper...), digits...), special...)
+
+    pick := func(set []rune) rune {
+        r, err := crand.Int(crand.Reader, big.NewInt(int64(len(set))))
+        if err != nil { return set[int(time.Now().UnixNano())%len(set)] }
+        return set[r.Int64()]
+    }
+    out := make([]rune, n)
+    // Garante uma de cada
+    out[0] = pick(lower)
+    out[1] = pick(upper)
+    out[2] = pick(digits)
+    out[3] = pick(special)
+    for i := 4; i < n; i++ {
+        out[i] = pick(all)
+    }
+    for i := n - 1; i > 0; i-- {
+        r, err := crand.Int(crand.Reader, big.NewInt(int64(i+1)))
+        j := i
+        if err == nil { j = int(r.Int64()) }
+        out[i], out[j] = out[j], out[i]
+    }
+    return string(out)
+}
+
 // buildVerifyURL monta a URL pública para verificação, se base estiver configurada.
 func buildVerifyURL(r *http.Request, code string) string {
 	if strings.TrimSpace(code) == "" {
@@ -894,4 +1347,16 @@ func requestBaseURL(r *http.Request) string {
 		return ""
 	}
 	return scheme + "://" + host
+}
+
+// clientIP extrai IP do X-Forwarded-For ou RemoteAddr
+func clientIP(r *http.Request) string {
+    if r == nil { return "" }
+    if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
+        parts := strings.Split(xff, ",")
+        if len(parts) > 0 { return strings.TrimSpace(parts[0]) }
+    }
+    host := r.RemoteAddr
+    if i := strings.LastIndex(host, ":"); i > 0 { host = host[:i] }
+    return host
 }

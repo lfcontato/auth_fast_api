@@ -19,6 +19,8 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 system_role TEXT NOT NULL,
+                subscription_plan TEXT NOT NULL DEFAULT 'monthly',
+                expires_at TIMESTAMPTZ NULL,
                 is_verified BOOLEAN NOT NULL DEFAULT FALSE,
                 owner_id BIGINT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -41,6 +43,7 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 admin_id BIGINT NOT NULL REFERENCES admins(id),
                 code TEXT NOT NULL UNIQUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NULL,
                 consumed_at TIMESTAMPTZ NULL
             );`,
             `CREATE INDEX IF NOT EXISTS idx_admins_verifications_admin_id ON admins_verifications(admin_id);`,
@@ -53,6 +56,8 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 system_role TEXT NOT NULL,
+                subscription_plan TEXT NOT NULL DEFAULT 'monthly',
+                expires_at TIMESTAMP NULL,
                 is_verified BOOLEAN NOT NULL DEFAULT 0,
                 owner_id INTEGER NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -77,6 +82,7 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 admin_id INTEGER NOT NULL,
                 code TEXT NOT NULL UNIQUE,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NULL,
                 consumed_at TIMESTAMP NULL,
                 FOREIGN KEY(admin_id) REFERENCES admins(id)
             );`,
@@ -88,6 +94,17 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
         if _, err := sqldb.ExecContext(ctx, s); err != nil {
             return err
         }
+    }
+
+    // Best-effort ALTERs to add new columns on existing schemas; ignore errors if columns already exist
+    if IsPostgres() {
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'monthly'`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins_verifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL`)
+    } else {
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN subscription_plan TEXT NOT NULL DEFAULT 'monthly'`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN expires_at TIMESTAMP NULL`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins_verifications ADD COLUMN expires_at TIMESTAMP NULL`)
     }
     return nil
 }

@@ -15,6 +15,8 @@ type Admin struct {
     Username     string
     PasswordHash string
     SystemRole   string
+    SubscriptionPlan string
+    ExpiresAt    *time.Time
     IsVerified   bool
     OwnerID      *int64
     CreatedAt    time.Time
@@ -40,4 +42,3 @@ var (
     ErrUnauthorized       = errors.New("unauthorized")
     ErrNotFound           = errors.New("not found")
 )
-

@@ -88,11 +88,27 @@ Exemplos de códigos já utilizados:
 - 400 Bad Request: JSON inválido
 - 401 Unauthorized: credenciais inválidas
 
-Exemplo curl:
+Exemplo curl (sem MFA):
 ```
 curl -X POST http://localhost:8080/admin/auth/token \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"stringst"}'
+```
+
+MFA por E‑mail (opcional)
+
+- Quando `MFA_EMAIL_ENABLED=true`, o login exige um segundo fator por código enviado por e‑mail.
+- Fluxo:
+  1) POST `/admin/auth/token` com `username/password` → `202 Accepted` com `{ "mfa_required": true, "mfa_tx": "..." }`.
+  2) O usuário recebe o código (por padrão, 6 dígitos) no e‑mail.
+  3) POST `/admin/auth/mfa/verify` com `{ "mfa_tx": "...", "code": "123456" }` → `200 OK` com tokens.
+- Limites: tentativas por `mfa_tx` (default 5) e expiração do código (default 10 min; configurável por env).
+
+Exemplo curl (verificar MFA):
+```
+curl -X POST http://localhost:8080/admin/auth/mfa/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"mfa_tx":"<do passo 1>","code":"123456"}'
 ```
 
 ## Renovação de Tokens (Refresh)
@@ -124,17 +140,87 @@ curl -X POST http://localhost:8080/admin/auth/token/refresh \
 - Autenticação: `Authorization: Bearer <ACCESS_TOKEN>` (papel do solicitante deve ser superior ao `system_role` alvo)
 - Corpo (JSON):
   ```json
-  {"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user"}
+  {
+    "email":"novo@dominio.com",
+    "username":"novo_admin",
+    "password":"SenhaForte123",
+    "system_role":"user",
+    "subscription_plan":"monthly"
+  }
   ```
 - 201 Created
   - Corpo:
   ```json
-  {"success":true,"admin_id":1,"username":"novo_admin","email":"novo@dominio.com","system_role":"user"}
+  {
+    "success":true,
+    "admin_id":1,
+    "username":"novo_admin",
+    "email":"novo@dominio.com",
+    "system_role":"user",
+    "subscription_plan":"monthly",
+    "expires_at":"2025-11-19T00:00:00Z"
+  }
   ```
 - 401/403: token ausente/inválido ou permissão insuficiente
 - 409: `email` ou `username` já existentes
 
 Observação: após a criação, um e-mail é enviado ao novo administrador usando o template configurado em `ADMIN_CREATED_TEMPLATE_NAME` (padrão `admin_created.html`).
+
+## Alterar Papel (system_role)
+- Método: PATCH
+- Rota: `/admin/{admin_id}/system-role`
+- Autenticação: `Authorization: Bearer <ACCESS_TOKEN>`
+- Corpo (JSON):
+  ```json
+  {"system_role":"user|admin|root|guest"}
+  ```
+- Regras de hierarquia:
+  - O solicitante deve ter papel estritamente superior ao papel atual do alvo e ao novo papel desejado.
+  - `root` pode alterar o papel de qualquer administrador (inclusive promover/demover para `root`).
+- Respostas:
+  - 200 OK: `{ "success": true, "admin_id": <id>, "old_role": "user", "new_role": "admin" }`
+  - 401/403 conforme autorização insuficiente
+  - 404 se admin alvo não encontrado
+
+## Alterar Plano (subscription_plan)
+- Método: PATCH
+- Rota: `/admin/{admin_id}/subscription-plan`
+- Autenticação: `Authorization: Bearer <ACCESS_TOKEN>`
+- Corpo (JSON):
+  ```json
+  {"subscription_plan":"minute|hourly|daily|trial|monthly|semiannual|annual|lifetime"}
+  ```
+- Regras:
+  - `root` pode definir qualquer plano.
+  - Demais administradores podem definir até `semiannual` (inclusive).
+  - `expires_at` é recalculado automaticamente:
+    - `lifetime`: `expires_at = null`
+    - `annual`: +1 ano; `semiannual`: +6 meses; `monthly`: +1 mês; `trial`: +7 dias; `daily`: +1 dia; `hourly`: +1 hora; `minute`: +5 minutos
+- Tokens respeitam o plano:
+  - Access/Refresh nunca ultrapassam `expires_at` (exceto `lifetime`).
+- Respostas:
+  - 200 OK: `{ "success": true, "admin_id": <id>, "new_plan": "monthly" }`
+  - 401/403 conforme autorização
+  - 404 se admin não encontrado
+
+Exemplos de cálculo de expires_at
+
+Considerando agora = `2025-10-19T12:00:00Z` (apenas ilustrativo):
+- `minute`     → `2025-10-19T12:05:00Z`
+- `hourly`     → `2025-10-19T13:00:00Z`
+- `daily`      → `2025-10-20T12:00:00Z`
+- `trial`      → `2025-10-26T12:00:00Z`
+- `monthly`    → `2025-11-19T12:00:00Z`
+- `semiannual` → `2026-04-19T12:00:00Z`
+- `annual`     → `2026-10-19T12:00:00Z`
+- `lifetime`   → `null`
+
+Exemplo de resposta após PATCH (monthly)
+```json
+{ "success": true, "admin_id": 2, "new_plan": "monthly" }
+```
+
+Observação: os tokens (access/refresh) nunca ultrapassam `expires_at` (exceto `lifetime`).
 
 ## Verificação de Conta
 - Método: POST
@@ -143,6 +229,7 @@ Observação: após a criação, um e-mail é enviado ao novo administrador usan
   - `/admin/auth/verify` (compatibilidade; pública). Corpo: `{ "code": "<64 hex>", "password": "<senha_inicial>" }`
 - 200 OK: `{ "success": true, "verified": true }`
 - Erros: `AUTH_400_006/007/008`, `AUTH_401_004`, `AUTH_500_003..006`
+- Observação: códigos expiram (24h) — após expirar, a verificação é negada.
 
 Exemplo curl (code na URL):
 ```
@@ -158,6 +245,21 @@ curl -X POST http://localhost:8080/admin/auth/verify-code/<CODE> \
 - Comportamento: gera nova senha (8 dígitos), `is_verified=0`, cria novo código e envia e-mail com senha/código/link de verificação.
 - 200 OK: `{ "success": true, "sent": true }` (também quando e-mail não existe, para evitar enumeração)
 - Em Vercel, envio é síncrono (a função aguarda o SMTP concluir).
+- Rate limit: por IP (10/h) e por e‑mail (3/15min). Excedendo, retorna 429.
+
+## Alterar Senha Própria
+- Método: PATCH
+- Rota: `/admin/password`
+- Autenticação: `Authorization: Bearer <ACCESS_TOKEN>`
+- Corpo (JSON):
+  ```json
+  {"current_password":"<senha_atual>","new_password":"<nova_senha>"}
+  ```
+- Política de senha:
+  - Padrão: mínimo 8 caracteres.
+  - Estrito (quando `PASSWORD_POLICY_STRICT=true`): exige maiúscula, minúscula, número e caractere especial.
+- 200 OK: `{ "success": true }`
+- Erros: `AUTH_400_030/031`, `AUTH_400_005`, `AUTH_401_005/006`, `AUTH_404_001`, `AUTH_500_030/031`
 
 # Fluxo Recomendado para Clientes/IA
 1. Efetue login com `username` e `password` e armazene `access_token` e `refresh_token` de forma segura.
@@ -186,7 +288,23 @@ Passos:
   - `ROOT_AUTH_USER`, `ROOT_AUTH_EMAIL`, `ROOT_AUTH_PASSWORD` (seed do usuário root na primeira execução)
   - `LOG_LEVEL` (DEBUG, INFO, WARN, ERROR) – controla verbosidade de logs da API (requisições e eventos)
   - `PUBLIC_BASE_URL` – base usada para montar links de verificação enviados por e‑mail
+  - `PASSWORD_POLICY_STRICT` – quando `true`, aplica política de senha forte (maiúscula/minúscula/número/especial) em criação/recuperação/troca de senha
+  - `REDIS_URL` – conexão Redis para rate limit/lockout
+  - MFA por e‑mail:
+    - `MFA_EMAIL_ENABLED` (true/false)
+    - `MFA_CODE_TTL_MINUTES` (default 10)
+    - `MFA_CODE_LENGTH` (default 6)
+    - `MFA_MAX_ATTEMPTS` (default 5)
   - Em Vercel: se `DATABASE_URL` estiver vazio, a API usa SQLite em `/tmp/auth_fast_api.db` (dados efêmeros). Para produção, configure Postgres via `DATABASE_URL`.
+
+# Recursos Pendentes/Planejados
+
+- Detalhar/Remover administrador: GET/DELETE `/admin/{admin_id}` (hierarquia com salvaguardas).
+- Alterar e‑mail próprio: PATCH `/admin/email` (reinicia verificação + reenvio de código).
+- Governança de lockouts: GET/POST `/admin/unlock`, GET `/admin/unlock/all`.
+- Verificação pública e reenvio: GET `/admin/auth/verify-link`, POST `/admin/auth/verification-code`.
+- Sessões: POST `/admin/auth/logout` e `/admin/auth/logout/all` (revoga sessão atual/todas).
+- DTO/i18n: padronizar envelope e localizar mensagens (pt-BR/en-US).
 
 ## E-mails (SMTP)
 

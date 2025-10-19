@@ -69,13 +69,14 @@ Infra/Arquitetura
 - `.gitignore` ampliado (binários Go, node_modules, editores etc.).
 - Fallback de banco em ambiente serverless: se `DATABASE_URL` estiver vazio em Vercel/Lambda, usa SQLite em `/tmp/auth_fast_api.db` (área gravável). Mantém portabilidade; para produção real, recomenda-se Postgres.
 - Logs de requisição em todas as rotas (método, caminho, status, duração) via `statusWriter` com `LOG_LEVEL` (DEBUG/INFO/WARN/ERROR).
+ - Logs agora incluem User-Agent e bytes respondidos.
 
 E-mail
 - Serviço SMTP (`internal/services/email`) agora suporta templates embutidos (embedded) via `template_email/embed.go`. Se o arquivo não estiver no filesystem, carrega do FS embutido.
 - Em ambiente serverless, envios de e-mail passaram a ser síncronos (antes eram goroutines após a resposta), garantindo que o e-mail seja enviado antes do término da execução.
 - Fallbacks de remetente: se `EMAIL_FROM_*` não forem definidos, usa `EMAIL_SERVER_USERNAME`/`EMAIL_SERVER_NAME`.
 
-Rotas implementadas/ajustadas
+ Rotas implementadas/ajustadas
 - `POST /admin` (criar admin):
   - Aceita `/admin` e `/admin/`.
   - Campo `password` opcional; se vazio, gera senha numérica de 8 dígitos.
@@ -86,6 +87,16 @@ Rotas implementadas/ajustadas
   - Nova tabela `admins_verifications` para armazenar e consumir códigos.
 - Recuperação de senha:
   - `POST /admin/auth/password-recovery`: gera nova senha (8 dígitos), marca `is_verified=0`, cria novo código e envia e-mail com senha e link de verificação.
+ - Alteração de senha própria:
+   - `PATCH /admin/password`: valida senha atual; aplica política de senha; e-mail de confirmação.
+
+- Planos e papéis:
+  - `PATCH /admin/{id}/subscription-plan`: atualiza plano; recalcula `expires_at`; tokens passam a respeitar o novo limite (clamp em login/refresh).
+  - `PATCH /admin/{id}/system-role`: altera papel sob hierarquia estrita (root pode todos).
+
+- Senhas (política e alteração):
+  - Política de senha implementada com modo estrito opcional (`PASSWORD_POLICY_STRICT`).
+  - `PATCH /admin/password`: altera a senha do próprio admin; valida senha atual; aplica política e envia e-mail de confirmação.
 
 Templates de e-mail
 - `template_email/admin_created.html` atualizado para incluir `Senha inicial`, `Código de verificação` e botão com `VerifyURL`.
@@ -98,4 +109,27 @@ Observações de deploy (Vercel)
 - `api/index.go` deve ser `package handler` com `func Handler(http.ResponseWriter, *http.Request)`. O build remoto exige isso.
 - Rewrites configurados para aceitar rotas sem `/api`.
 - Em logs de produção, agora aparece: `[INFO]  METHOD /path -> STATUS (duration)`.
+ - Redis suportado via `REDIS_URL` para rate limit/lockout.
 
+Segurança e Resiliência
+- Rate limit e lockout implementados com Redis:
+  - Login: IP (20/5min), usuário (20/5min), lock de falhas (>=5/15min).
+  - Recovery: IP (10/h), e‑mail (3/15min).
+- Códigos de verificação passam a expirar (24h) — coluna `expires_at` e checagem no uso.
+ - MFA por e‑mail: login em 2 etapas quando `MFA_EMAIL_ENABLED=true` (retém tokens no Redis até validação do código em `/admin/auth/mfa/verify`).
+Planejado/próxima entrega
+- `PATCH /admin/{admin_id}/system-role`: rota autenticada para alterar o `system_role` de outro administrador sob regra de hierarquia:
+  - Somente é permitido alterar administradores com papel estritamente inferior ao do solicitante.
+  - O novo papel também deve ser estritamente inferior ao do solicitante.
+  - Exceção: `root` pode alterar qualquer papel (inclusive promover/demover para `root`).
+
+Pendências mapeadas após revisão
+
+- Rotas REST ainda não implementadas (constam no README):
+  - GET `/admin/{admin_id}` – detalhe; DELETE `/admin/{admin_id}` – remoção com salvaguardas.
+  - PATCH `/admin/email` – altera e‑mail próprio, reinicia verificação e gera novo código.
+  - GET/POST `/admin/unlock`, GET `/admin/unlock/all` – governança de bloqueios/lockouts.
+  - GET `/admin/auth/verify-link`, POST `/admin/auth/verification-code` – verificação por link público e reenvio.
+  - POST `/admin/auth/logout`, POST `/admin/auth/logout/all` – revogação de sessão atual e de todas as sessões.
+- Padrão de mensagens/DTO com i18n – centralizar catálogo de erros/códigos e traduções.
+- Auditoria/métricas – registrar mudanças sensíveis (papel, plano, senha) e expor métricas básicas.
