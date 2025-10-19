@@ -1,0 +1,51 @@
+<!-- Caminho: template_email/admin_created.html -->
+<!-- Resumo: Template HTML para notificar novo administrador criado (credenciais inicializadas e instruções). -->
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{if .Title}}{{.Title}}{{else}}Conta de administrador criada{{end}}</title>
+    <style>
+      body{background:#f6f8fb;margin:0;padding:0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827}
+      .container{max-width:640px;margin:0 auto;padding:24px}
+      .card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden}
+      .header{background:#10b981;color:#fff;padding:20px 24px}
+      .content{padding:24px}
+      h1{font-size:20px;margin:0 0 8px}
+      p{line-height:1.55;margin:0 0 14px}
+      .kv{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;margin:10px 0}
+      .kv div{margin:4px 0}
+      .kv strong{color:#065f46}
+      .btn{display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px}
+      .muted{color:#6b7280;font-size:13px}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <div class="header">
+          <h1>{{if .Title}}{{.Title}}{{else}}Bem-vindo(a) à equipe de administração{{end}}</h1>
+        </div>
+        <div class="content">
+          <p>{{if .Message}}{{.Message}}{{else}}Sua conta de administrador foi criada com sucesso.{{end}}</p>
+          <div class="kv">
+            {{if .Email}}<div><strong>E-mail:</strong> {{.Email}}</div>{{end}}
+            {{if .Username}}<div><strong>Usuário:</strong> {{.Username}}</div>{{end}}
+            {{if .Password}}<div><strong>Senha inicial:</strong> {{.Password}}</div>{{end}}
+            {{if .SystemRole}}<div><strong>Papel:</strong> {{.SystemRole}}</div>{{end}}
+            {{if .CreatedByRole}}<div><strong>Criado por:</strong> {{.CreatedByRole}}</div>{{end}}
+            {{if .VerificationCode}}<div><strong>Código de verificação:</strong> {{.VerificationCode}}</div>{{end}}
+          </div>
+          {{if .VerifyURL}}
+          <p>
+            <a class="btn" href="{{.VerifyURL}}" target="_blank" rel="noopener">Verificar minha conta</a>
+          </p>
+          {{end}}
+          <p class="muted">Por segurança, altere sua senha no primeiro acesso e ative a verificação em duas etapas quando disponível.</p>
+          <p class="muted">Se você não solicitou esta conta, ignore este e-mail ou contate o suporte.</p>
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>

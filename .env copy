@@ -1,0 +1,38 @@
+# =============================================================================
+# Básico necessário para rodar o sistema atual
+# =============================================================================
+# DATABASE_URL='sqlite:///database_test.db'
+# SUPABASE = 'K7k63DXBS4sqHsg3'
+# DATABASE_URL='postgresql://postgres:[YOUR_PASSWORD]@db.xivpjhvvsnlnhydfgdzu.supabase.co:5432/postgres'
+# DATABASE_URL='postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable'
+DATABASE_URL='postgresql://postgres:K7k63DXBS4sqHsg3@db.xivpjhvvsnlnhydfgdzu.supabase.co:5432/postgres&sslmode=disable'
+SECRET_KEY='a-string-secret-at-least-256-bits-long'
+TOKEN_ACCESS_EXPIRE_SECONDS=1800
+TOKEN_REFRESH_EXPIRE_SECONDS=2592000
+
+# =============================================================================
+# Usuário inicial (seed)
+# =============================================================================
+ROOT_AUTH_USER='admin'
+ROOT_AUTH_EMAIL='admin@example.com'
+ROOT_AUTH_PASSWORD='stringst'
+
+# =============================================================================
+# Logs
+# =============================================================================
+# Nível de log da API: DEBUG, INFO, WARN, ERROR
+# Use DEBUG para ver requisições (método, caminho, status, duração) e eventos como login/refresh/criação de admin
+LOG_LEVEL='DEBUG'
+
+
+# Configuração do SMTP
+EMAIL_SERVER_USERNAME="noreply@blockmap.com.br"
+EMAIL_SERVER_NAME="blockmap"
+EMAIL_SERVER_PASSWORD="8wqqqbbQ_"
+EMAIL_SERVER_SMTP_HOST="email-ssl.com.br"
+EMAIL_SERVER_SMTP_PORT="465"
+EMAIL_SERVER_SMTP_ENCRYPTION="SSL/TLS"
+
+# Remetente explícito (recomendado)
+EMAIL_FROM_ADDRESS="noreply@blockmap.com.br"
+EMAIL_FROM_NAME="blockmap"

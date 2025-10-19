@@ -1,0 +1,1296 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "auth-app",
+        "version": "0.2.0"
+    },
+    "paths": {
+        "/admin/auth/token": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Emitir tokens",
+                "description": "Realiza autenticação via formulário (`username`/`password`) e retorna par de tokens JWT.\n\nInclui o `admin_id`, `email` e `admin=true` nas claims para consumo interno.",
+                "operationId": "issue_token_admin_auth_token_post",
+                "requestBody": {
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_issue_token_admin_auth_token_post"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/token/refresh": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Renovar tokens",
+                "description": "Recebe um refresh token válido e emite novo par access/refresh.",
+                "operationId": "refresh_token_admin_auth_token_refresh_post",
+                "requestBody": {
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Body_refresh_token_admin_auth_token_refresh_post"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/verify": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Confirmar conta (API protegida)",
+                "description": "Valida o código de verificação informado para o administrador autenticado.\n\nRetorna mensagens claras para cenários de link expirado, já utilizado ou inválido.\n\n**Proteções**:\n- Exige Bearer token válido (apenas admins autenticados).\n- Respeita rate limit do envio de códigos e bloqueios temporários configurados.",
+                "operationId": "verify_admin_admin_auth_verify_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminProtectedVerificationRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ]
+            }
+        },
+        "/admin/auth/verify-link": {
+            "get": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Confirmar conta via link",
+                "description": "Endpoint consumido pelo link enviado por e-mail.\n\nAceita os parâmetros `login` e `code` e responde com mensagens de sucesso ou erro conforme o estado da verificação.\n\n**Proteções**:\n- Rate limit (`VERIFY_LINK_INTERVAL_SECONDS`) por login.\n- Códigos expiram após `VERIFICATION_CODE_EXPIRE_SECONDS`.",
+                "operationId": "verify_admin_link_admin_auth_verify_link_get",
+                "parameters": [
+                    {
+                        "name": "login",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Login"
+                        }
+                    },
+                    {
+                        "name": "code",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Code"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/password-recovery": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Recuperar senha",
+                "description": "Permite redefinir a senha informando e-mail e nova senha.\n\nSem `recovery_token` no payload, gera um token temporário (via e-mail) respeitando o rate limit `PASSWORD_RECOVERY_INTERVAL_SECONDS`. Com token válido, redefine a senha e envia e-mail de confirmação.\n\n**Proteções**:\n- Tokens expiram em `PASSWORD_RECOVERY_TOKEN_EXPIRE_SECONDS` e são validados no Redis.\n- Rate limit configurável por e-mail.\n- E-mail transacional de confirmação após alteração.",
+                "operationId": "recover_password_admin_auth_password_recovery_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminPasswordRecoveryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/auth/verification-code": {
+            "post": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Reenviar código de verificação",
+                "description": "Regenera o código de verificação para o administrador informado via `email`.\n\nSe `channel` não for enviado, reaproveita o último canal registrado. Disponível apenas para contas ainda não verificadas.\n\n**Proteções**:\n- Rate limit (`VERIFICATION_RESEND_INTERVAL_SECONDS`) e throttle enquanto o código atual está válido.\n- Envia e-mail de verificação e registra tentativa no log.",
+                "operationId": "resend_verification_admin_auth_verification_code_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminPasswordRecoveryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminVerificationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Criar administrador",
+                "description": "Cria um novo administrador com credenciais iniciais, contatos opcionais e gera um código de verificação.",
+                "operationId": "create_admin_admin__post",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "accept-language",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Accept-Language"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminCreateInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminOutput"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Listar administradores",
+                "description": "Retorna administradores paginados em ordem crescente de `id`.\n\nUse os parâmetros `offset` e `limit` para navegar entre páginas.\n\n**Proteções**:\n- Exige autenticação Bearer.\n- Retorna apenas registros que o solicitante pode gerenciar (hierarquia `system_role`).",
+                "operationId": "list_admins_admin__get",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "default": 0,
+                            "title": "Offset"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1,
+                            "default": 20,
+                            "title": "Limit"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/{admin_id}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Detalhar administrador",
+                "description": "Busca um administrador específico pelo `admin_id`.\n\nRetorna 404 quando o registro não existe.\n\n**Proteções**:\n- Exige autenticação Bearer.\n- Apenas admins com `system_role` superior podem visualizar outros registros.",
+                "operationId": "get_admin_admin__admin_id__get",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "admin_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Admin Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminOutput"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Remover administrador",
+                "description": "Exclui o administrador informado e seus contatos associados.\n\nRetorna 404 caso o registro já tenha sido removido.\n\n**Proteções**:\n- Exige autenticação Bearer.\n- Impede autoexclusão e remoção de papéis superiores.",
+                "operationId": "delete_admin_admin__admin_id__delete",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "admin_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Admin Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/password": {
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Alterar senha",
+                "description": "Permite ao próprio administrador trocar a senha.\n\n**Regras**:\n- Necessário informar a senha atual correta.\n- Nova senha deve ser confirmada e diferente da atual.\n- Disponível apenas para o usuário autenticado dono do recurso.\n\n**Proteções**:\n- Rate limit/lock por falhas consecutivas monitorado em Redis.\n- E-mail de confirmação enviado após alteração.",
+                "operationId": "change_password_admin_password_patch",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminChangePasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ]
+            }
+        },
+        "/admin/email": {
+            "patch": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Alterar e-mail",
+                "description": "Atualiza o e-mail do administrador autenticado e reinicia o processo de verificação.\n\nApós a alteração:\n1. `is_verified` volta para `false`.\n2. Um novo código é gerado.\n3. Um e-mail de confirmação é enviado automaticamente.",
+                "operationId": "change_email_admin_email_patch",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminChangeEmailRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminOutput"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ]
+            }
+        },
+        "/admin/unlock": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Desbloquear administrador",
+                "description": "Remove bloqueios temporários aplicados por tentativas malsucedidas.\n\nDisponível apenas para administradores com `system_role` igual a `root` ou `admin` e requer informar o e-mail da conta alvo.",
+                "operationId": "unlock_admin_admin_unlock_post",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdminUnlockRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Consultar bloqueios do administrador",
+                "description": "Retorna o estado de bloqueio (login e troca de senha) associado ao e-mail informado.\n\nDisponível para `system_role` igual a `root` ou `admin`.",
+                "operationId": "get_unlock_status_admin_unlock_get",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "email",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Email"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminUnlockStatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/password-recovery": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Disparar recuperação de senha",
+                "description": "Gera e envia o token de recuperação de senha para o administrador informado.\n\n**Fluxo**:\n- Respeita o rate limit `PASSWORD_RECOVERY_INTERVAL_SECONDS`.\n- Envia e-mail contendo token e link (quando configurado) para redefinição.",
+                "operationId": "trigger_password_recovery_admin_password_recovery_post",
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "login",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Login"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdminMessageResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/unlock/all": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Listar bloqueios ativos",
+                "description": "Retorna todos os bloqueios temporários registrados no Redis para administradores.",
+                "operationId": "list_unlock_status_admin_unlock_all_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/AdminUnlockStatusResponse"
+                                    },
+                                    "type": "array",
+                                    "title": "Response List Unlock Status Admin Unlock All Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "OAuth2PasswordBearer": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AdminChangeEmailRequest": {
+                "properties": {
+                    "new_email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "New Email"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "new_email"
+                ],
+                "title": "AdminChangeEmailRequest"
+            },
+            "AdminChangePasswordRequest": {
+                "properties": {
+                    "current_password": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 8,
+                        "title": "Current Password"
+                    },
+                    "new_password": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 8,
+                        "title": "New Password"
+                    },
+                    "new_password_confirm": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 8,
+                        "title": "New Password Confirm"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "current_password",
+                    "new_password",
+                    "new_password_confirm"
+                ],
+                "title": "AdminChangePasswordRequest"
+            },
+            "AdminContactInput": {
+                "properties": {
+                    "contact_type": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Contact Type"
+                    },
+                    "contact_value": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "minLength": 3,
+                        "title": "Contact Value"
+                    },
+                    "is_main": {
+                        "type": "boolean",
+                        "title": "Is Main",
+                        "default": false
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "contact_value"
+                ],
+                "title": "AdminContactInput"
+            },
+            "AdminCreateInput": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "password": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 8,
+                        "title": "Password"
+                    },
+                    "username": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "minLength": 4,
+                        "title": "Username"
+                    },
+                    "system_role": {
+                        "type": "string",
+                        "title": "System Role",
+                        "default": "guest"
+                    },
+                    "resource_role": {
+                        "type": "string",
+                        "title": "Resource Role",
+                        "default": "viewer"
+                    },
+                    "subscription_plan": {
+                        "type": "string",
+                        "title": "Subscription Plan",
+                        "default": "trial"
+                    },
+                    "account_status": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "description": "Estado global da conta; controla se o usuário pode autenticar e operar."
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Account Status"
+                    },
+                    "contacts": {
+                        "items": {
+                            "$ref": "#/components/schemas/AdminContactInput"
+                        },
+                        "type": "array",
+                        "title": "Contacts"
+                    },
+                    "verification_channel": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Verification Channel"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "email",
+                    "password",
+                    "username"
+                ],
+                "title": "AdminCreateInput"
+            },
+            "AdminListResponse": {
+                "properties": {
+                    "offset": {
+                        "type": "integer",
+                        "title": "Offset"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "title": "Limit"
+                    },
+                    "items": {
+                        "items": {
+                            "$ref": "#/components/schemas/AdminOutput"
+                        },
+                        "type": "array",
+                        "title": "Items"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "offset",
+                    "limit",
+                    "items"
+                ],
+                "title": "AdminListResponse"
+            },
+            "AdminMessageResponse": {
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "title": "Message"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "message"
+                ],
+                "title": "AdminMessageResponse"
+            },
+            "AdminOutput": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "username": {
+                        "type": "string",
+                        "title": "Username"
+                    },
+                    "owner_id": {
+                        "type": "integer",
+                        "title": "Owner Id"
+                    },
+                    "system_role": {
+                        "type": "string",
+                        "title": "System Role"
+                    },
+                    "resource_role": {
+                        "type": "string",
+                        "title": "Resource Role"
+                    },
+                    "subscription_plan": {
+                        "type": "string",
+                        "title": "Subscription Plan"
+                    },
+                    "account_status": {
+                        "type": "string",
+                        "title": "Account Status",
+                        "description": "Estado global da conta; controla se o usuário pode autenticar e operar."
+                    },
+                    "is_verified": {
+                        "type": "boolean",
+                        "title": "Is Verified"
+                    },
+                    "verification_channel": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Verification Channel"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "email",
+                    "username",
+                    "owner_id",
+                    "system_role",
+                    "resource_role",
+                    "subscription_plan",
+                    "account_status",
+                    "is_verified",
+                    "verification_channel"
+                ],
+                "title": "AdminOutput"
+            },
+            "AdminPasswordRecoveryRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "recovery_token": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 256,
+                                "minLength": 8
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Recovery Token"
+                    },
+                    "new_password": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 64,
+                                "minLength": 8
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "New Password"
+                    },
+                    "new_password_confirm": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 64,
+                                "minLength": 8
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "New Password Confirm"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "email",
+                    "new_password",
+                    "new_password_confirm"
+                ],
+                "title": "AdminPasswordRecoveryRequest"
+            },
+            "AdminProtectedVerificationRequest": {
+                "properties": {
+                    "verification_code": {
+                        "type": "string",
+                        "maxLength": 32,
+                        "minLength": 4,
+                        "title": "Verification Code"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "verification_code"
+                ],
+                "title": "AdminProtectedVerificationRequest"
+            },
+            "AdminUnlockRequest": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "email"
+                ],
+                "title": "AdminUnlockRequest"
+            },
+            "AdminUnlockStatusResponse": {
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "is_blocked_login": {
+                        "type": "boolean",
+                        "title": "Is Blocked Login"
+                    },
+                    "is_blocked_password": {
+                        "type": "boolean",
+                        "title": "Is Blocked Password"
+                    },
+                    "login_retry_in_seconds": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Login Retry In Seconds"
+                    },
+                    "password_retry_in_seconds": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Password Retry In Seconds"
+                    },
+                    "last_ip": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Last Ip"
+                    },
+                    "user_agent": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "User Agent"
+                    },
+                    "blocked_at": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Blocked At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "email",
+                    "is_blocked_login",
+                    "is_blocked_password"
+                ],
+                "title": "AdminUnlockStatusResponse"
+            },
+            "AdminVerificationResponse": {
+                "properties": {
+                    "admin_id": {
+                        "type": "integer",
+                        "title": "Admin Id"
+                    },
+                    "channel": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Channel"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Expires At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "admin_id",
+                    "channel",
+                    "expires_at"
+                ],
+                "title": "AdminVerificationResponse"
+            },
+            "Body_issue_token_admin_auth_token_post": {
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "title": "Username"
+                    },
+                    "password": {
+                        "type": "string",
+                        "title": "Password"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "username",
+                    "password"
+                ],
+                "title": "Body_issue_token_admin_auth_token_post"
+            },
+            "Body_refresh_token_admin_auth_token_refresh_post": {
+                "properties": {
+                    "refresh_token": {
+                        "type": "string",
+                        "title": "Refresh Token"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "refresh_token"
+                ],
+                "title": "Body_refresh_token_admin_auth_token_refresh_post"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        },
+        "securitySchemes": {
+            "OAuth2PasswordBearer": {
+                "type": "oauth2",
+                "flows": {
+                    "password": {
+                        "scopes": {},
+                        "tokenUrl": "/admin/auth/token"
+                    }
+                }
+            }
+        }
+    }
+}

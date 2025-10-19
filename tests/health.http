@@ -1,0 +1,8 @@
+# Caminho: tests/health.http
+# Resumo: Teste de verificação de saúde do serviço local com REST Client.
+
+@baseUrl = http://localhost:8080
+
+### Health check
+GET {{baseUrl}}/healthz
+

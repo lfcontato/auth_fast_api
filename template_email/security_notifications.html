@@ -1,0 +1,55 @@
+<!-- Caminho: template_email/security_notifications.html -->
+<!-- Resumo: Template HTML para notificações de segurança (alertas de login, alteração de senha, etc.). -->
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Title}}</title>
+    <style>
+      body{background:#0b1220;margin:0;padding:0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#e5e7eb}
+      .container{max-width:640px;margin:0 auto;padding:24px}
+      .card{background:#111827;border:1px solid #253046;border-radius:12px;overflow:hidden}
+      .header{background:#1f2937;color:#fff;padding:20px 24px;border-bottom:1px solid #253046}
+      .content{padding:24px}
+      h1{font-size:20px;margin:0 0 8px}
+      p{line-height:1.55;margin:0 0 14px}
+      .kv{background:#0b1220;border:1px solid #253046;border-radius:8px;padding:12px 14px;margin:10px 0}
+      .kv div{margin:4px 0}
+      .kv strong{color:#93c5fd}
+      .btn{display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px}
+      .muted{color:#9ca3af;font-size:13px}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <div class="header">
+          <h1>{{.Title}}</h1>
+        </div>
+        <div class="content">
+          <p>{{.Message}}</p>
+          <div class="kv">
+            {{if .Event}}<div><strong>Evento:</strong> {{.Event}}</div>{{end}}
+            {{if .Email}}<div><strong>E-mail:</strong> {{.Email}}</div>{{end}}
+            {{if .Username}}<div><strong>Usuário:</strong> {{.Username}}</div>{{end}}
+            {{if .Time}}<div><strong>Data/Hora:</strong> {{.Time}}</div>{{end}}
+            {{if .IPAddress}}<div><strong>IP:</strong> {{.IPAddress}}</div>{{end}}
+            {{if .UserAgent}}<div><strong>Agente:</strong> {{.UserAgent}}</div>{{end}}
+          </div>
+          {{if .ActionURL}}
+          <p>
+            <a class="btn" href="{{.ActionURL}}" target="_blank" rel="noopener">{{if .ActionText}}{{.ActionText}}{{else}}Revisar atividade{{end}}</a>
+          </p>
+          {{end}}
+          {{if .SecurityTips}}
+          <p class="muted">{{.SecurityTips}}</p>
+          {{else}}
+          <p class="muted">Se não foi você, altere sua senha e ative 2FA.</p>
+          {{end}}
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>
+

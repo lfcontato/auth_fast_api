@@ -1,0 +1,30 @@
+# Caminho: tests/auth.http
+# Resumo: Testes de autenticação de administrador usando VS Code REST Client.
+# Usa variáveis do .env para username e password via {{$dotenv KEY}}.
+
+@baseUrl = http://localhost:8080
+@user = {{$dotenv ROOT_AUTH_USER}}
+@pass = {{$dotenv ROOT_AUTH_PASSWORD}}
+
+### @login
+POST {{baseUrl}}/admin/auth/token
+Content-Type: application/json
+
+{
+  "username": "{{user}}",
+  "password": "{{pass}}"
+}
+
+### Login response preview
+GET {{baseUrl}}/
+X-Debug-Access: {{login.response.body.$.access_token}}
+X-Debug-Refresh: {{login.response.body.$.refresh_token}}
+
+### @refresh
+POST {{baseUrl}}/admin/auth/token/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "{{login.response.body.$.refresh_token}}" 
+}
+

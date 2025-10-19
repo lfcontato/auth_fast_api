@@ -1,0 +1,46 @@
+<!-- Caminho: template_email/email_notifications.html -->
+<!-- Resumo: Template HTML genérico para notificações por e-mail com título, mensagem e CTA opcional. -->
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Title}}</title>
+    <style>
+      body{background:#f6f8fb;margin:0;padding:0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937}
+      .container{max-width:640px;margin:0 auto;padding:24px}
+      .card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden}
+      .header{background:#0ea5e9;color:#fff;padding:20px 24px}
+      .content{padding:24px}
+      h1{font-size:20px;margin:0 0 8px}
+      p{line-height:1.55;margin:0 0 16px}
+      .btn{display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px}
+      .footer{font-size:12px;color:#6b7280;padding:16px 24px;background:#f9fafb}
+      .muted{color:#6b7280;font-size:14px}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <div class="header">
+          <h1>{{.Title}}</h1>
+        </div>
+        <div class="content">
+          <p>{{.Message}}</p>
+          {{if .ActionURL}}
+          <p>
+            <a class="btn" href="{{.ActionURL}}" target="_blank" rel="noopener">{{if .ActionText}}{{.ActionText}}{{else}}Acessar{{end}}</a>
+          </p>
+          {{end}}
+          {{if .ExtraNote}}
+          <p class="muted">{{.ExtraNote}}</p>
+          {{end}}
+        </div>
+        <div class="footer">
+          {{if .FooterText}}{{.FooterText}}{{else}}Este é um e-mail automático, não responda.{{end}}
+        </div>
+      </div>
+    </div>
+  </body>
+  </html>
+
