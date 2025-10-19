@@ -43,14 +43,60 @@ npm i -D vercel
 npx vercel dev
 Ou rode local sem Vercel
 
-go run ./cmd/server
+
+```bash
+# local
+go run ./cmd/server 
+
+# -- assim funciona
 curl -i http://localhost:8080/healthz
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Sun, 19 Oct 2025 16:55:44 GMT
+Content-Length: 57
+{"ok":true,"service":"auth_fast_api","status":"healthy"} -->
+
+# -- assim funciona
+curl -sS -X POST http://localhost:8080/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}' 
+
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA4OTQ3NzksInNpZCI6IjM5YWI4ZTFmLWY3NGYtNGE5My05NzU2LWNjOWE3ZDczOGU2YyIsInNybyI6InJvb3QiLCJzdWIiOiJhZG1pbnwxIiwid3NzIjp7fX0.RWEHh2Umy_g9oRQmn75wjrcNmLQIDV3W2k9jbXPnw-g","refresh_token":"34f62c88851441c127cea461d5c1fd9c70854914de261d0c6ef4fb2958450758","success":true}
+
+
+# na vercel
+
+# -- assim funciona
 curl -i https://auth-fast-api.vercel.app/healthz
--- assim funciona
+
+HTTP/2 200 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json; charset=utf-8
+date: Sun, 19 Oct 2025 16:58:54 GMT
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+x-vercel-cache: MISS
+x-vercel-id: gru1::iad1::zbqbh-1760893134194-354c4829fe19
+content-length: 57
+
+{"ok":true,"service":"auth_fast_api","status":"healthy"}
 
 
-curl -sS -X POST http://localhost:8080/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
+# -- assim não funciona
 curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
+
+A server error has occurred
+
+FUNCTION_INVOCATION_FAILED
+
+gru1::rhcj4-1760893167938-264f5f8cb8b0
+
+```
+
+
+
+
+
 
 rodei
 npm init -y

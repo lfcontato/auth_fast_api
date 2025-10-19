@@ -58,10 +58,15 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 // adminAuthTokenHandler é um stub do endpoint de login /admin/auth/token.
 // Por enquanto retorna 501 (Not Implemented) até integração com serviços de autenticação.
 func adminAuthTokenHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+    if service == nil || sqldb == nil {
+        logWarn("login attempted before service init")
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
+    var req struct {
+        Username string `json:"username"`
+        Password string `json:"password"`
+    }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_001", "message": "JSON inválido"})
 		return
@@ -623,10 +628,20 @@ func init() {
 	// Em desenvolvimento, preferimos que o .env local sobrescreva variáveis já definidas
 	_ = godotenv.Overload()
 	cfg = config.Load()
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = cfg.DatabaseURL
-	}
+    dbURL := os.Getenv("DATABASE_URL")
+    if dbURL == "" { dbURL = cfg.DatabaseURL }
+    // Em serverless (Vercel/Lambda), se não houver DATABASE_URL, use SQLite em /tmp (área gravável)
+    if strings.TrimSpace(dbURL) == "" {
+        if os.Getenv("VERCEL") != "" || os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+            dbURL = "/tmp/auth_fast_api.db"
+        }
+    }
+    if os.Getenv("VERCEL") != "" {
+        // Log leve para depuração (não imprime DSN completo)
+        target := "custom"
+        if strings.Contains(dbURL, "/tmp/") || strings.HasPrefix(dbURL, "/tmp") { target = "sqlite-/tmp" }
+        logInfo("serverless init: selecting database target=%s", target)
+    }
 	var err error
 	sqldb, err = db.Connect(dbURL)
 	if err != nil {
