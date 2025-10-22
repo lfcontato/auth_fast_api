@@ -1,5 +1,5 @@
 // Caminho: internal/db/migrate.go
-// Resumo: Migrações mínimas para criar tabelas necessárias (admins, admins_sessions_local).
+// Resumo: Migrações mínimas para criar tabelas necessárias (admins, admins_sessions_local, admins_api_tokens).
 
 package db
 
@@ -47,6 +47,19 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 consumed_at TIMESTAMPTZ NULL
             );`,
             `CREATE INDEX IF NOT EXISTS idx_admins_verifications_admin_id ON admins_verifications(admin_id);`,
+            // Tokens de API (para MCP/n8n) - armazenamos apenas hash
+            `CREATE TABLE IF NOT EXISTS admins_api_tokens (
+                id BIGSERIAL PRIMARY KEY,
+                admin_id BIGINT NOT NULL REFERENCES admins(id),
+                name TEXT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TIMESTAMPTZ NULL,
+                revoked_at TIMESTAMPTZ NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_used_at TIMESTAMPTZ NULL
+            );`,
+            `CREATE INDEX IF NOT EXISTS idx_api_tokens_admin_id ON admins_api_tokens(admin_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON admins_api_tokens(token_hash);`,
         }
     } else {
         stmts = []string{
@@ -87,6 +100,21 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 FOREIGN KEY(admin_id) REFERENCES admins(id)
             );`,
             `CREATE INDEX IF NOT EXISTS idx_admins_verifications_admin_id ON admins_verifications(admin_id);`,
+            // Tokens de API (para MCP/n8n) - armazenamos apenas hash
+            `CREATE TABLE IF NOT EXISTS admins_api_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                name TEXT NULL,
+                token_hash TEXT NOT NULL,
+                expires_at TIMESTAMP NULL,
+                revoked_at TIMESTAMP NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP NULL,
+                UNIQUE(token_hash),
+                FOREIGN KEY(admin_id) REFERENCES admins(id)
+            );`,
+            `CREATE INDEX IF NOT EXISTS idx_api_tokens_admin_id ON admins_api_tokens(admin_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON admins_api_tokens(token_hash);`,
         }
     }
 

@@ -6,6 +6,7 @@ package httpapi
 import (
     "context"
     crand "crypto/rand"
+    "crypto/sha256"
     "database/sql"
     "encoding/hex"
     "encoding/json"
@@ -862,6 +863,97 @@ func adminChangeOwnPasswordHandler(w http.ResponseWriter, r *http.Request) {
     writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
+// adminCreateAPITokenHandler cria um token de API (PAT) para uso via Bearer (MCP/n8n),
+// com as mesmas permissões do administrador autenticado.
+// Entrada: { name?: string, ttl_hours?: int, expires_at?: RFC3339 }
+// Saída: { success: true, token: string, token_id: number, name?: string, expires_at?: time }
+func adminCreateAPITokenHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"success": false, "code": "HTTP_405", "message": "Método não permitido"})
+        return
+    }
+    actingID, _, err := authenticateAdmin(r)
+    if err != nil || actingID <= 0 {
+        writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_PAT", "message": "não autorizado"})
+        return
+    }
+    var req struct {
+        Name      string `json:"name"`
+        TTLHours  int    `json:"ttl_hours"`
+        ExpiresAt string `json:"expires_at"` // RFC3339 opcional
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err.Error() != "EOF" {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_PAT", "message": "JSON inválido"})
+        return
+    }
+    name := strings.TrimSpace(req.Name)
+    if len(name) > 128 { name = name[:128] }
+    // Calcula expiração: default segue TOKEN_REFRESH_EXPIRE_SECONDS; sempre clamp por admins.expires_at (quando aplicável)
+    now := time.Now()
+    var exp time.Time
+    if strings.TrimSpace(req.ExpiresAt) != "" {
+        t, e := time.Parse(time.RFC3339, req.ExpiresAt)
+        if e != nil {
+            writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_EXP", "message": "expires_at inválido (RFC3339)"})
+            return
+        }
+        exp = t
+    } else if req.TTLHours > 0 {
+        exp = now.Add(time.Duration(req.TTLHours) * time.Hour)
+    } else {
+        // Default ao mesmo TTL do refresh token
+        refreshSec := parseIntEnv("TOKEN_REFRESH_EXPIRE_SECONDS", 2592000)
+        exp = now.Add(timeSeconds(refreshSec))
+    }
+    // Clamp conforme plano/expiração do admin
+    var plan string
+    var adminExpires sql.NullTime
+    if err := sqldb.QueryRow(db.Rebind(`SELECT subscription_plan, expires_at FROM admins WHERE id = ? LIMIT 1`), actingID).Scan(&plan, &adminExpires); err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_PAT_ADMIN", "message": "Falha ao validar conta"})
+        return
+    }
+    if strings.ToLower(plan) != "lifetime" && adminExpires.Valid {
+        if exp.After(adminExpires.Time) {
+            exp = adminExpires.Time
+        }
+    }
+    if !exp.After(now) {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_EXP_RANGE", "message": "expiração deve ser futura"})
+        return
+    }
+    // Gera token opaco e salva hash
+    tokBytes := make([]byte, 32)
+    if _, err := crand.Read(tokBytes); err != nil {
+        writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_PAT", "message": "Falha ao gerar token"})
+        return
+    }
+    token := hex.EncodeToString(tokBytes)
+    h := sha256.Sum256([]byte(token))
+    var id int64
+    if db.IsPostgres() {
+        q := db.Rebind(`INSERT INTO admins_api_tokens (admin_id, name, token_hash, expires_at) VALUES (?,?,?,?) RETURNING id`)
+        if err := sqldb.QueryRow(q, actingID, name, hex.EncodeToString(h[:]), exp).Scan(&id); err != nil {
+            writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_PAT_INS", "message": "Falha ao salvar token"})
+            return
+        }
+    } else {
+        res, err := sqldb.Exec(db.Rebind(`INSERT INTO admins_api_tokens (admin_id, name, token_hash, expires_at) VALUES (?,?,?,?)`), actingID, name, hex.EncodeToString(h[:]), exp)
+        if err != nil {
+            writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_PAT_INS", "message": "Falha ao salvar token"})
+            return
+        }
+        id, _ = res.LastInsertId()
+    }
+    // Retorna o token em claro apenas uma vez
+    writeJSON(w, http.StatusCreated, map[string]any{
+        "success":   true,
+        "token_id":  id,
+        "token":     token,
+        "name":      name,
+        "expires_at": exp,
+    })
+}
+
 // adminAuthVerifyCodeURLHandler confirma a conta recebendo o código na URL e senha no corpo.
 func adminAuthVerifyCodeURLHandler(w http.ResponseWriter, r *http.Request, code string) {
 	var req struct {
@@ -943,6 +1035,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		healthHandler(w, r)
 		return
 
+    case path == "/openapi.json" && r.Method == http.MethodGet:
+        // expõe o arquivo openapi.json da raiz do projeto
+        w.Header().Set("Content-Type", "application/json; charset=utf-8")
+        http.ServeFile(w, r, "openapi.json")
+        return
+
 	case path == "/admin/auth/token" && r.Method == http.MethodPost:
 		adminAuthTokenHandler(w, r)
 		return
@@ -986,6 +1084,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
     case path == "/admin/password" && r.Method == http.MethodPatch:
         adminChangeOwnPasswordHandler(w, r)
+        return
+
+    case path == "/admin/mcp/token" && r.Method == http.MethodPost:
+        adminCreateAPITokenHandler(w, r)
         return
 
 	// Compatibilidade com rewrites que possam incluir prefixo /api
@@ -1115,50 +1217,65 @@ func timeSeconds(s int) time.Duration { return time.Duration(s) * time.Second }
 
 // authenticateAdmin valida o header Authorization: Bearer e retorna (adminID, systemRole).
 func authenticateAdmin(r *http.Request) (int64, string, error) {
-	h := r.Header.Get("Authorization")
-	if !strings.HasPrefix(strings.ToLower(h), "bearer ") {
-		return 0, "", errors.New("token ausente")
-	}
-	tokenStr := strings.TrimSpace(h[len("Bearer "):])
-	tok, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("algoritmo inválido")
-		}
-		return []byte(cfg.SecretKey), nil
-	})
-	if err != nil || !tok.Valid {
-		return 0, "", errors.New("token inválido")
-	}
-	claims, ok := tok.Claims.(jwt.MapClaims)
-	if !ok {
-		return 0, "", errors.New("claims inválidas")
-	}
-	sub, _ := claims["sub"].(string)
-	sro, _ := claims["sro"].(string)
-	if sub == "" || sro == "" {
-		return 0, "", errors.New("claims incompletas")
-	}
-	var id int64 = 0
-	if strings.HasPrefix(sub, "admin|") {
-		// extrai ID após prefixo
-		parts := strings.SplitN(sub, "|", 2)
-		if len(parts) == 2 {
-			if n, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-				id = n
-			}
-		}
-	}
-	// Verifica no banco se a conta está verificada (is_verified = 1)
-	if id > 0 {
-		var verified bool
-		if err := sqldb.QueryRow(db.Rebind(`SELECT is_verified FROM admins WHERE id = ? LIMIT 1`), id).Scan(&verified); err != nil {
-			return 0, "", errors.New("conta inexistente")
-		}
-		if !verified {
-			return 0, "", errors.New("conta não verificada")
-		}
-	}
-	return id, sro, nil
+    h := r.Header.Get("Authorization")
+    if !strings.HasPrefix(strings.ToLower(h), "bearer ") {
+        return 0, "", errors.New("token ausente")
+    }
+    tokenStr := strings.TrimSpace(h[len("Bearer "):])
+    // 1) Tenta JWT (tokens de acesso existentes)
+    if tok, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+        if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, errors.New("algoritmo inválido")
+        }
+        return []byte(cfg.SecretKey), nil
+    }); err == nil && tok != nil && tok.Valid {
+        if claims, ok := tok.Claims.(jwt.MapClaims); ok {
+            sub, _ := claims["sub"].(string)
+            sro, _ := claims["sro"].(string)
+            if sub != "" && sro != "" {
+                var id int64 = 0
+                if strings.HasPrefix(sub, "admin|") {
+                    parts := strings.SplitN(sub, "|", 2)
+                    if len(parts) == 2 {
+                        if n, err := strconv.ParseInt(parts[1], 10, 64); err == nil { id = n }
+                    }
+                }
+                if id > 0 {
+                    var verified bool
+                    if err := sqldb.QueryRow(db.Rebind(`SELECT is_verified FROM admins WHERE id = ? LIMIT 1`), id).Scan(&verified); err != nil {
+                        return 0, "", errors.New("conta inexistente")
+                    }
+                    if !verified { return 0, "", errors.New("conta não verificada") }
+                }
+                return id, sro, nil
+            }
+        }
+    }
+    // 2) Fallback: token de API (PAT/MCP) – tratamos como opaco + hash no banco
+    hash := sha256.Sum256([]byte(tokenStr))
+    var (
+        adminID int64
+        role    string
+        verified bool
+    )
+    err := sqldb.QueryRow(db.Rebind(`
+        SELECT a.id, a.system_role, a.is_verified
+        FROM admins_api_tokens t
+        JOIN admins a ON a.id = t.admin_id
+        WHERE t.token_hash = ?
+          AND (t.expires_at IS NULL OR t.expires_at > CURRENT_TIMESTAMP)
+          AND t.revoked_at IS NULL
+        LIMIT 1
+    `), hex.EncodeToString(hash[:])).Scan(&adminID, &role, &verified)
+    if err != nil {
+        return 0, "", errors.New("token inválido")
+    }
+    if !verified {
+        return 0, "", errors.New("conta não verificada")
+    }
+    // Best-effort: atualiza last_used_at (ignora erro)
+    _, _ = sqldb.Exec(db.Rebind(`UPDATE admins_api_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE token_hash = ?`), hex.EncodeToString(hash[:]))
+    return adminID, role, nil
 }
 
 // canManageSystemRole verifica se actingRole possui prioridade estritamente maior que targetRole.

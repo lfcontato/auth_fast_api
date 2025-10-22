@@ -41,6 +41,11 @@ Rotas e cURL
     { "ok": true, "service": "auth_fast_api", "version": "0.1.0", "endpoints": ["/healthz", "/admin/auth/token", "/admin/auth/token/refresh", "/admin/auth/password-recovery", "/admin (GET)"] }
     ```
 
+- OpenAPI (esquema)
+  - GET `/openapi.json`
+  - cURL: `curl -s http://localhost:8080/openapi.json | jq .info`
+  - Uso: importar em clientes (Postman/Swagger UI/n8n etc.)
+
 - Login (obter tokens)
   - POST `/admin/auth/token`
   - Body: `{ "username": "<ROOT_AUTH_USER>", "password": "<ROOT_AUTH_PASSWORD>" }`
@@ -79,6 +84,19 @@ Rotas e cURL
     - 400 `AUTH_400_002` JSON inválido ou refresh ausente
     - 401 `AUTH_401_002` Refresh token inválido
 
+- Criar Token de API (PAT) para n8n/MCP
+  - POST `/admin/mcp/token`
+  - Auth: `Authorization: Bearer <ACCESS_TOKEN>` (JWT obtido no login)
+  - Body: `{ "name": "n8n", "ttl_hours": 720 }` (ou `expires_at` RFC3339)
+  - cURL:
+    - `PAT=$(curl -sS -X POST http://localhost:8080/admin/mcp/token -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"name":"n8n","ttl_hours":720}' | jq -r .token)`
+    - `curl -sS http://localhost:8080/admin -H "Authorization: Bearer $PAT"`
+  - Observações:
+    - O `PAT` herda as permissões (system_role) do criador.
+    - Armazene o token com segurança; ele é mostrado apenas na criação.
+    - Expiração padrão: se `ttl_hours`/`expires_at` não forem enviados, a expiração usa `TOKEN_REFRESH_EXPIRE_SECONDS`.
+    - Clamp: a expiração nunca ultrapassa `admins.expires_at` quando o plano não é `lifetime`.
+
 - Criar novo administrador
   - POST `/admin`
   - Auth: `Authorization: Bearer <ACCESS_TOKEN>`
@@ -113,10 +131,11 @@ Rotas e cURL
 - Listar administradores (autenticada)
   - GET `/admin`
   - Regra: você vê apenas papéis com prioridade inferior ao seu; `root` vê todos (incluindo `root`).
-  - Headers: `Authorization: Bearer <ACCESS_TOKEN>`
+  - Headers: `Authorization: Bearer <ACCESS_TOKEN>` ou `Authorization: Bearer <API_TOKEN>`
   - Paginação: `offset` (default 0) e `limit` (default 20, máx. 100)
   - cURL (primeira página):
     - `curl -sS -X GET 'http://localhost:8080/admin?offset=0&limit=20' -H "Authorization: Bearer $ACCESS"`
+    - `curl -sS -X GET 'http://localhost:8080/admin?offset=0&limit=20' -H "Authorization: Bearer $PAT"`
   - cURL (página seguinte):
     - `curl -sS -X GET 'http://localhost:8080/admin?offset=20&limit=20' -H "Authorization: Bearer $ACCESS"`
   - Resposta (200):

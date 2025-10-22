@@ -16,6 +16,8 @@ Resumo: Itens pendentes, riscos e sugestões de melhoria com base no código atu
   - PATCH `/admin/{id}/system-role` (hierarquia estrita; root pode todos)
   - PATCH `/admin/{id}/subscription-plan` (root pode qualquer plano; demais até `semiannual`)
   - PATCH `/admin/password` (alterar própria senha, valida senha atual; aplica política de senha; envia e‑mail de confirmação)
+  - GET `/openapi.json` (exposição do esquema OpenAPI)
+  - POST `/admin/mcp/token` (criação de Token de API opaco para integrações n8n/MCP)
 
 Sugestão:
 - Implementar as rotas faltantes com as salvaguardas do README e padronizar envelope de resposta/códigos.
@@ -39,6 +41,12 @@ Sugestão:
   - Throttling de recovery por IP/e‑mail conforme acima.
 - E‑mail:
   - Envio síncrono em serverless (ok). Falta retry/backoff/poison‑queue. Sugestão: repetir com backoff; registrar bounce/reporting ao futuro.
+- Tokens de API (PAT/MCP):
+  - Armazenamento seguro do token com `sha256` (hash) na tabela `admins_api_tokens`.
+  - Expiração padrão segue `TOKEN_REFRESH_EXPIRE_SECONDS`; também respeita clamp por `admins.expires_at` (planos não‑lifetime). Opção de customizar via `ttl_hours`/`expires_at`.
+  - Marcação de `last_used_at` (best‑effort).
+  - Autenticação `Bearer` agora aceita JWT de acesso ou token opaco; ambos resultam em `(adminID, systemRole)` via `authenticateAdmin`.
+  - Melhorias futuras: listagem/revogação explícita, escopos por token, limites de uso, auditoria detalhada.
 
 **3) Domínio, Planos e Sessões**
 - Mudança de plano e sessões ativas:
@@ -52,7 +60,8 @@ Sugestão:
 - Restrições e checks:
   - Não há CHECKs de domínio (enums) para `system_role`/`subscription_plan`. Sugestão: CHECKs em Postgres; em SQLite, validação na app.
 - Índices:
-  - Índice apenas em `admins_sessions_local.admin_id` e unicidade em `session_id/code/email/username`. Sugestão: índice para `refresh_token_hash`, `admins_verifications(admin_id, consumed_at)`, e possivelmente em `admins(expires_at)` para rotinas de limpeza/listagem.
+  - Adicionados: tabela `admins_api_tokens` com índices em `admin_id` e `token_hash`.
+  - Pendentes: índice para `admins_sessions_local.refresh_token_hash`, `admins_verifications(admin_id, consumed_at)`, e possivelmente `admins(expires_at)` para rotinas de limpeza/listagem.
 - Limpeza de dados:
   - Sem rotina de expurgo de sessões/códigos antigos. Em serverless, pode ser “on‑read” ou job externo.
 - Timezone/clock:
@@ -88,6 +97,8 @@ Estado atual após revisão (resumo)
 - Sanitização de `username/email` (normalização, limites, set de caracteres, tamanho máximo, e‑mail RFC).
 - Templates de e‑mail dedicados por fluxo (ex.: `password_recovery.html`) — hoje o recovery reutiliza conteúdo próximo do criado.
 - Consistência de envelopes/códigos HTTP (ex.: 502 no e‑mail já é usado; alinhar com catálogo de erros consolidado).
+- OpenAPI público: considerar opção para proteger `/openapi.json` em ambientes privados ou expor versão reduzida (sem rotas administrativas sensíveis) quando necessário.
+- Governança de PAT: endpoints de listar/revogar tokens, e escopos de permissão específicos por token.
 
 **Referências (arquivos importantes)**
 - Handlers HTTP (rotas e lógica): `pkg/httpapi/httpapi.go`

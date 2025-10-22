@@ -22,11 +22,15 @@ As rotas documentadas abaixo assumem a base local. Em Vercel, prefixe com `/api`
 
 # Autenticação e Tokens
 
+- Há dois tipos de credencial que podem ser usados no cabeçalho `Authorization: Bearer ...`:
+  1) JWT de acesso (via login) – curta duração; e
+  2) Token de API (opaco) – criado pelo administrador via `/admin/mcp/token` para integrações como n8n/MCP.
+
 - Login retorna dois tokens:
   - `access_token`: JWT assinado (HS256), válido por tempo curto (default 1800s).
   - `refresh_token`: token opaco aleatório, válido por tempo maior (default 2592000s) e rotacionado a cada refresh.
-- Para rotas protegidas, envie o Access Token no cabeçalho HTTP:
-  - `Authorization: Bearer <ACCESS_TOKEN>`
+- Para rotas protegidas, envie no cabeçalho HTTP:
+  - `Authorization: Bearer <ACCESS_TOKEN>` (JWT) ou `Authorization: Bearer <API_TOKEN>` (opaco)
 - Quando o Access expirar, use o Refresh no endpoint de refresh para obter novo par de tokens. O refresh anterior é revogado (rotação) e um novo é emitido.
 
 ## Conteúdo do JWT (Access Token)
@@ -132,6 +136,17 @@ Exemplo curl:
 curl -X POST http://localhost:8080/admin/auth/token/refresh \
   -H 'Content-Type: application/json' \
   -d '{"refresh_token":"<REFRESH_TOKEN_DO_LOGIN>"}'
+```
+
+## OpenAPI (Esquema da API)
+- Método: GET
+- Rota: `/openapi.json`
+- Autenticação: Não necessária (público)
+- Uso: a maioria dos clientes (n8n, Postman, Swagger UI) aceita importar o arquivo diretamente a partir desta URL.
+
+Exemplo:
+```
+curl -s http://localhost:8080/openapi.json | jq .info
 ```
 
 ## Criar Administrador
@@ -261,11 +276,47 @@ curl -X POST http://localhost:8080/admin/auth/verify-code/<CODE> \
 - 200 OK: `{ "success": true }`
 - Erros: `AUTH_400_030/031`, `AUTH_400_005`, `AUTH_401_005/006`, `AUTH_404_001`, `AUTH_500_030/031`
 
+# Tokens de API (para n8n/MCP)
+
+- Método: POST
+- Rota: `/admin/mcp/token`
+- Autenticação: `Authorization: Bearer <ACCESS_TOKEN>` (JWT obtido no login) – usado apenas para criar o token de API.
+- Corpo (JSON):
+  ```json
+  { "name": "n8n-mcp", "ttl_hours": 720 }
+  ```
+- Resposta (201 Created):
+  ```json
+  { "success": true, "token_id": 1, "token": "<API_TOKEN>", "name": "n8n-mcp", "expires_at": "2025-01-01T00:00:00Z" }
+  ```
+- Uso: para chamadas subsequentes, utilize `Authorization: Bearer <API_TOKEN>` como se fosse o JWT. O token herda as permissões (`system_role`) do administrador que o criou.
+- Observações de segurança:
+  - O token é exibido apenas uma vez na criação; armazene com segurança.
+  - Expiração padrão: se você não passar `ttl_hours`/`expires_at`, o token expira em `TOKEN_REFRESH_EXPIRE_SECONDS` (mesmo TTL do refresh token).
+  - Clamp: a expiração do token nunca ultrapassa `admins.expires_at` quando o plano não é `lifetime`. Se o resultado não for futuro, a criação é rejeitada.
+  - Você pode definir expiração via `ttl_hours` ou `expires_at` (RFC3339). Um prazo sempre será aplicado (default + clamp) — não há tokens sem expiração.
+
+Exemplo cURL (criar token e usar):
+```
+ACCESS="<ACCESS_TOKEN_JWT>"
+PAT=$(curl -sS -X POST http://localhost:8080/admin/mcp/token \
+  -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' \
+  -d '{"name":"n8n","ttl_hours":720}' | jq -r .token)
+
+curl -sS http://localhost:8080/admin -H "Authorization: Bearer $PAT"
+```
+
+Configuração no n8n
+- Em um nó HTTP Request, defina Authentication = Bearer Token e informe o valor retornado em `token`.
+- Defina a URL base da sua instância e consuma as rotas normalmente. Você também pode importar `/openapi.json` em ferramentas compatíveis para gerar requests automaticamente.
+
 # Fluxo Recomendado para Clientes/IA
 1. Efetue login com `username` e `password` e armazene `access_token` e `refresh_token` de forma segura.
 2. Para chamadas a recursos protegidos, envie `Authorization: Bearer <access_token>`.
 3. Ao receber 401 por expiração do access, chame o endpoint de refresh com o `refresh_token` atual, substitua ambos os tokens pelo novo par e repita a chamada original.
 4. Nunca reutilize um refresh já rotacionado (ele é revogado após o uso com sucesso).
+
+Para integrações servidor‑a‑servidor (n8n/MCP), prefira token de API opaco criado por um administrador com as permissões desejadas e expiração adequada.
 
 # Exemplos com REST Client (VS Code)
 

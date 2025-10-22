@@ -10,6 +10,7 @@ server
 devseed
 
 # Editors and misc
+.env
 .vscode
 .idea
 *.log

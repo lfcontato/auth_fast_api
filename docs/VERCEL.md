@@ -3,6 +3,9 @@
 ```bash
 vercel pull --environment=development
 vercel env pull .env.development
+
+vercel pull --environment=preview
+vercel env pull .env.preview
 ```
 
 # Com o terminal no diretório do projeto dev, use o comando dev:
