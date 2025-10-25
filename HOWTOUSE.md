@@ -24,7 +24,8 @@ As rotas documentadas abaixo assumem a base local. Em Vercel, prefixe com `/api`
 
 - Há dois tipos de credencial que podem ser usados no cabeçalho `Authorization: Bearer ...`:
   1) JWT de acesso (via login) – curta duração; e
-  2) Token de API (opaco) – criado pelo administrador via `/admin/mcp/token` para integrações como n8n/MCP.
+  2) Token de API (opaco) – criado pelo administrador via `/admin/mcp/token` para integrações como n8n.
+  - Para integração com servidores MCP externos, veja `docs/MCP_GUIDE.md`.
 
 - Login retorna dois tokens:
   - `access_token`: JWT assinado (HS256), válido por tempo curto (default 1800s).
@@ -276,7 +277,7 @@ curl -X POST http://localhost:8080/admin/auth/verify-code/<CODE> \
 - 200 OK: `{ "success": true }`
 - Erros: `AUTH_400_030/031`, `AUTH_400_005`, `AUTH_401_005/006`, `AUTH_404_001`, `AUTH_500_030/031`
 
-# Tokens de API (para n8n/MCP)
+# Tokens de API (para integrações)
 
 - Método: POST
 - Rota: `/admin/mcp/token`
@@ -316,7 +317,7 @@ Configuração no n8n
 3. Ao receber 401 por expiração do access, chame o endpoint de refresh com o `refresh_token` atual, substitua ambos os tokens pelo novo par e repita a chamada original.
 4. Nunca reutilize um refresh já rotacionado (ele é revogado após o uso com sucesso).
 
-Para integrações servidor‑a‑servidor (n8n/MCP), prefira token de API opaco criado por um administrador com as permissões desejadas e expiração adequada.
+Para integrações servidor‑a‑servidor (ex.: n8n), prefira token de API opaco criado por um administrador com as permissões desejadas e expiração adequada.
 
 # Exemplos com REST Client (VS Code)
 

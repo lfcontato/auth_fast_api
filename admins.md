@@ -84,7 +84,7 @@ Rotas e cURL
     - 400 `AUTH_400_002` JSON inválido ou refresh ausente
     - 401 `AUTH_401_002` Refresh token inválido
 
-- Criar Token de API (PAT) para n8n/MCP
+- Criar Token de API (PAT) para integrações (ex.: n8n)
   - POST `/admin/mcp/token`
   - Auth: `Authorization: Bearer <ACCESS_TOKEN>` (JWT obtido no login)
   - Body: `{ "name": "n8n", "ttl_hours": 720 }` (ou `expires_at` RFC3339)
@@ -96,6 +96,7 @@ Rotas e cURL
     - Armazene o token com segurança; ele é mostrado apenas na criação.
     - Expiração padrão: se `ttl_hours`/`expires_at` não forem enviados, a expiração usa `TOKEN_REFRESH_EXPIRE_SECONDS`.
     - Clamp: a expiração nunca ultrapassa `admins.expires_at` quando o plano não é `lifetime`.
+  - Integração via MCP externo: consulte `docs/MCP_GUIDE.md`.
 
 - Criar novo administrador
   - POST `/admin`

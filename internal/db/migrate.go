@@ -47,7 +47,7 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 consumed_at TIMESTAMPTZ NULL
             );`,
             `CREATE INDEX IF NOT EXISTS idx_admins_verifications_admin_id ON admins_verifications(admin_id);`,
-            // Tokens de API (para MCP/n8n) - armazenamos apenas hash
+            // Tokens de API (para integrações como n8n) - armazenamos apenas hash
             `CREATE TABLE IF NOT EXISTS admins_api_tokens (
                 id BIGSERIAL PRIMARY KEY,
                 admin_id BIGINT NOT NULL REFERENCES admins(id),
@@ -100,7 +100,7 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
                 FOREIGN KEY(admin_id) REFERENCES admins(id)
             );`,
             `CREATE INDEX IF NOT EXISTS idx_admins_verifications_admin_id ON admins_verifications(admin_id);`,
-            // Tokens de API (para MCP/n8n) - armazenamos apenas hash
+            // Tokens de API (para integrações como n8n) - armazenamos apenas hash
             `CREATE TABLE IF NOT EXISTS admins_api_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 admin_id INTEGER NOT NULL,

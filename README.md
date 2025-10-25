@@ -199,14 +199,15 @@ Backlog (próximas entregas)
 - Rewrites no `vercel.json` habilitam `/healthz` e `/admin` sem prefixo `/api`.
 - Banco em serverless: fallback automático para SQLite em `/tmp` quando `DATABASE_URL` não estiver definido (dados efêmeros). Para produção, configure Postgres.
 
-### Novidades: OpenAPI e Tokens de API (MCP/n8n)
+### Novidades: OpenAPI e Tokens de API (integrações)
 
-- `GET /openapi.json` – expõe o arquivo `openapi.json` da raiz (público), para integração e documentação.
-- `POST /admin/mcp/token` – cria um Token de API (Bearer) vinculado ao administrador autenticado.
+  - `GET /openapi.json` – expõe o arquivo `openapi.json` da raiz (público), para integração e documentação.
+  - `POST /admin/mcp/token` – cria um Token de API (Bearer) vinculado ao administrador autenticado.
   - Request: `{ "name"?: string, "ttl_hours"?: number, "expires_at"?: RFC3339 }`
   - Response: `{ "success": true, "token_id": number, "token": string, "name"?: string, "expires_at"?: string }`
   - Expiração: por padrão segue `TOKEN_REFRESH_EXPIRE_SECONDS`. A expiração é "clampada" por `admins.expires_at` quando o plano não é `lifetime`.
-  - Use o valor de `token` como `Authorization: Bearer <token>` no n8n/MCP. O token herda o mesmo `system_role` do administrador e respeita expiração/revogação.
+  - Use o valor de `token` como `Authorization: Bearer <token>` em integrações (ex.: n8n). O token herda o mesmo `system_role` do administrador e respeita expiração/revogação.
+  - Para integrar via MCP externo, consulte `docs/MCP_GUIDE.md`.
 - Serviço de E-mail SMTP (`internal/services/email`) com templates embutidos (embed). Se o arquivo não existir no FS, usa o template embutido.
 - Envio de e-mail síncrono em ambientes serverless (Vercel/Lambda) para garantir entrega antes do término da execução.
 - Novas rotas e comportamentos:

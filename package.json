@@ -8,8 +8,7 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "mcp:server": "node mcp/server.mjs"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
@@ -18,7 +17,6 @@
     "vercel": "^25.2.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.0",
     "abbrev": "^3.0.1",
     "acorn": "^8.15.0",
     "acorn-import-attributes": "^1.9.5",

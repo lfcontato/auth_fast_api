@@ -863,7 +863,7 @@ func adminChangeOwnPasswordHandler(w http.ResponseWriter, r *http.Request) {
     writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
-// adminCreateAPITokenHandler cria um token de API (PAT) para uso via Bearer (MCP/n8n),
+// adminCreateAPITokenHandler cria um token de API (PAT) para uso via Bearer (integrações como n8n),
 // com as mesmas permissões do administrador autenticado.
 // Entrada: { name?: string, ttl_hours?: int, expires_at?: RFC3339 }
 // Saída: { success: true, token: string, token_id: number, name?: string, expires_at?: time }
@@ -1251,7 +1251,7 @@ func authenticateAdmin(r *http.Request) (int64, string, error) {
             }
         }
     }
-    // 2) Fallback: token de API (PAT/MCP) – tratamos como opaco + hash no banco
+    // 2) Fallback: token de API (PAT) – tratamos como opaco + hash no banco
     hash := sha256.Sum256([]byte(tokenStr))
     var (
         adminID int64

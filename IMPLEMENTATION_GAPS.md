@@ -17,10 +17,11 @@ Resumo: Itens pendentes, riscos e sugestões de melhoria com base no código atu
   - PATCH `/admin/{id}/subscription-plan` (root pode qualquer plano; demais até `semiannual`)
   - PATCH `/admin/password` (alterar própria senha, valida senha atual; aplica política de senha; envia e‑mail de confirmação)
   - GET `/openapi.json` (exposição do esquema OpenAPI)
-  - POST `/admin/mcp/token` (criação de Token de API opaco para integrações n8n/MCP)
+- POST `/admin/mcp/token` (criação de Token de API opaco para integrações como n8n)
 
 Sugestão:
 - Implementar as rotas faltantes com as salvaguardas do README e padronizar envelope de resposta/códigos.
+- Manter `docs/MCP_GUIDE.md` atualizado sempre que novos endpoints/alterações forem entregues (guia é a referência para integrações/MCP externo).
 
 **2) Segurança e Resiliência (implementado nesta fase)**
 - Rate limit e lockout:
@@ -41,7 +42,7 @@ Sugestão:
   - Throttling de recovery por IP/e‑mail conforme acima.
 - E‑mail:
   - Envio síncrono em serverless (ok). Falta retry/backoff/poison‑queue. Sugestão: repetir com backoff; registrar bounce/reporting ao futuro.
-- Tokens de API (PAT/MCP):
+- Tokens de API (PAT):
   - Armazenamento seguro do token com `sha256` (hash) na tabela `admins_api_tokens`.
   - Expiração padrão segue `TOKEN_REFRESH_EXPIRE_SECONDS`; também respeita clamp por `admins.expires_at` (planos não‑lifetime). Opção de customizar via `ttl_hours`/`expires_at`.
   - Marcação de `last_used_at` (best‑effort).
