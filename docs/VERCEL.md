@@ -36,8 +36,7 @@ Washington, D.C., USA (East) - us-east-1 - iad1
 
 vercel dev
 Testes:
-curl -i http://localhost:3000/healthz
-curl -i http://localhost:3000/api/healthz (também funciona por compatibilidade)
+curl -i http://localhost:3000/api/healthz
 Se ainda der erro de permissão no builder global
 
 Use o CLI local ao projeto (evita gravar em /usr/lib):
@@ -61,15 +60,15 @@ Content-Length: 57
 {"ok":true,"service":"auth_fast_api","status":"healthy"} -->
 
 # -- assim funciona
-curl -sS -X POST http://localhost:8080/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}' 
+curl -sS -X POST http://localhost:8080/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
 
 {"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA4OTQ3NzksInNpZCI6IjM5YWI4ZTFmLWY3NGYtNGE5My05NzU2LWNjOWE3ZDczOGU2YyIsInNybyI6InJvb3QiLCJzdWIiOiJhZG1pbnwxIiwid3NzIjp7fX0.RWEHh2Umy_g9oRQmn75wjrcNmLQIDV3W2k9jbXPnw-g","refresh_token":"34f62c88851441c127cea461d5c1fd9c70854914de261d0c6ef4fb2958450758","success":true}
 
 
 # na vercel
 
-# -- assim funciona
-curl -i https://auth-fast-api.vercel.app/healthz
+# -- produção (Vercel)
+curl -i https://auth-fast-api.vercel.app/api/healthz
 
 HTTP/2 200 
 age: 0
@@ -85,15 +84,23 @@ content-length: 57
 {"ok":true,"service":"auth_fast_api","status":"healthy"}
 
 
+<<<<<<< Updated upstream
 # -- assim funciona
 curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
+=======
+curl -sS -X POST https://auth-fast-api.vercel.app/api/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
+>>>>>>> Stashed changes
 
-A server error has occurred
+# -- assim funciona envia o e-mail
+curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
+{"sent":true,"success":true}
 
-FUNCTION_INVOCATION_FAILED
+# -- assim funciona envia o e-mail / reposta dá ok mas nao envia
+curl -sS -X POST https://auth-fast-api.vercel.app/api/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
+{"sent":true,"success":true}
 
-gru1::rhcj4-1760893167938-264f5f8cb8b0
 
+<<<<<<< Updated upstream
 # -- assim funciona envia o e-mail
 curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
 {"sent":true,"success":true}
@@ -101,7 +108,10 @@ curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-
 # -- assim funciona envia o e-mail / reposta dá ok mas nao envia
 curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
 {"sent":true,"success":true}
+=======
+>>>>>>> Stashed changes
 
+```
 
 
 ```

@@ -1,5 +1,6 @@
 # Vercel local metadata
 .vercel
+logs_vercel/
 
 # Node / Vercel CLI artifacts
 node_modules/
@@ -24,4 +25,4 @@ dist/
 *.tmp
 .DS_Store
 
-logs_vercel/
+logs_vercel/.env
