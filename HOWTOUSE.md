@@ -189,7 +189,11 @@ curl -s http://localhost:8080/openapi.json | jq .info
 - 401/403: token ausente/inválido ou permissão insuficiente
 - 409: `email` ou `username` já existentes
 
-Observação: após a criação, um e-mail é enviado ao novo administrador usando o template configurado em `ADMIN_CREATED_TEMPLATE_NAME` (padrão `admin_created.html`).
+Observações (Regra):
+- Documente sempre campos opcionais e seus defaults. Para criação de admin:
+  - `password` é opcional; se omitida, o sistema gera automaticamente.
+  - `system_role` default `guest`; `subscription_plan` default `trial`.
+- Após a criação, um e-mail é enviado ao novo administrador usando o template configurado em `ADMIN_CREATED_TEMPLATE_NAME` (padrão `admin_created.html`).
 
 ## Alterar Papel (system_role)
 - Método: PATCH

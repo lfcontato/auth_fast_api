@@ -21,7 +21,7 @@ curl -sS -X POST http://localhost:8080/admin \
   }' | jq .
 ```
 
-Notas de campos e defaults
+Notas de campos e defaults (Regra)
 - `password`: opcional; se omitida, o sistema gera.
 - `system_role`: opcional; default `guest`; enum `guest|user|admin|root`.
 - `subscription_plan`: opcional; default `trial`; enum `trial|monthly|semiannual|annual|lifetime`.
@@ -41,4 +41,3 @@ curl -sS -X PATCH http://localhost:8080/admin/2/subscription-plan \
   -H 'Content-Type: application/json' \
   -d '{"subscription_plan":"semiannual"}' | jq .
 ```
-

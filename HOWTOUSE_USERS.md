@@ -115,6 +115,7 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
   -H 'Content-Type: application/json' \
   -d '{"code":"<NOVO_CODIGO>","password":"<NOVA_SENHA>"}' | jq .
 ```
-# Notas de campos (Users)
+# Notas de campos (Users) — Regra
 - `tools_role`: default `guest`; opções: `guest|user|admin|root`.
 - `subscription_plan`: default `trial`; opções: `trial|monthly|semiannual|annual|lifetime`.
+- `password`: em fluxos de cadastro de usuário (quando presentes), é opcional; o sistema gera automaticamente quando omitida.

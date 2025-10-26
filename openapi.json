@@ -33,6 +33,7 @@
       "UserFields": {
         "type": "object",
         "properties": {
+          "password": { "type": "string", "description": "Opcional em fluxos de cadastro; gerada automaticamente quando omitida (política forte quando PASSWORD_POLICY_STRICT=true; caso contrário numérica de 8 dígitos)." },
           "tools_role": { "type": "string", "enum": ["guest","user","admin","root"], "default": "guest" },
           "subscription_plan": { "type": "string", "enum": ["trial","monthly","semiannual","annual","lifetime"], "default": "trial" }
         }

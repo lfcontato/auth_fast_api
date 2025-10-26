@@ -73,6 +73,11 @@ Padrões e enumerações (Admins/Users)
   - `tools_role`: default `guest`; opções `guest|user|admin|root`.
   - `subscription_plan`: default `trial`; opções `trial|monthly|semiannual|annual|lifetime`.
 
+Regra de documentação
+
+- Em todos os endpoints e exemplos, listar explicitamente os campos opcionais e seus valores padrão (defaults) para facilitar integrações (ex.: MCP).
+- Senhas em cadastro de Admin e (quando existir) de Usuário são opcionais e geradas automaticamente quando omitidas (política forte com `PASSWORD_POLICY_STRICT=true`).
+
 ---
 
 ### 1. Modelo de Dados e Estrutura (Completo)

@@ -1,5 +1,5 @@
 Arquivo: docs/USERS.md
-Resumo: Rotas e modelo de usuários (login/refresh/verify/recovery) e relação com UsersSpaces.
+Resumo: Rotas e modelo de usuários (login/refresh/verify/recovery) e relação com UsersSpaces. Regra de documentação: sempre listar campos opcionais e seus padrões. Em fluxos de cadastro de usuário (quando presentes), a senha é opcional e gerada automaticamente quando omitida.
 
 Manutenção: mantenha este documento atualizado sempre que alterar rotas, payloads, regras de autenticação/ACL. Este arquivo é o local canônico do checklist e “próximos passos” do recurso de Usuários. Os HOWTOUSE não devem conter checklists — apenas exemplos de consumo.
 

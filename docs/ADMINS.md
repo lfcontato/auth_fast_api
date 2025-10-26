@@ -1,5 +1,5 @@
 Arquivo: docs/ADMINS.md
-Resumo: Rotas de administradores (auth, MFA, refresh, verificação, recuperação, CRUD, PAT) com exemplos cURL.
+Resumo: Rotas de administradores (auth, MFA, refresh, verificação, recuperação, CRUD, PAT) com exemplos cURL. Regra de documentação: sempre listar campos opcionais e seus valores padrão (defaults) em cada endpoint. Senhas são opcionais em cadastro e geradas automaticamente quando omitidas.
 
 Manutenção: mantenha este documento sincronizado com as rotas. Checklists e roadmap ficam nos arquivos canônicos de cada domínio: docs/USERS.md e docs/TOOLS.md.
 

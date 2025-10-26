@@ -1,5 +1,8 @@
 Arquivo: docs/MCP_GUIDE.md
-Resumo: Guia prático para integrar um servidor MCP externo a esta API. Inclui exemplos cURL de todos os recursos atuais e orientações de configuração. Deve ser mantido atualizado a cada nova funcionalidade.
+Resumo: Guia prático para integrar um servidor MCP externo a esta API. Inclui exemplos cURL de todos os recursos atuais e orientações de configuração. Deve ser mantido atualizado a cada nova funcionalidade. Campo e padrões (defaults) atuais:
+- Admins: `system_role` (opcional; default `guest`; enum `guest|user|admin|root`), `subscription_plan` (opcional; default `trial`; enum `trial|monthly|semiannual|annual|lifetime`).
+- Users: `tools_role` (opcional; default `guest`; enum `guest|user|admin|root`), `subscription_plan` (opcional; default `trial`; enum `trial|monthly|semiannual|annual|lifetime`).
+- Este guia deve sempre explicitar campos opcionais e seus padrões e trazer exemplos cURL atualizados.
 
 # MCP Guide (integração externa)
 
@@ -118,9 +121,8 @@ curl -sS -X POST "$BASE/admin" \
   -d '{
         "email":"novo@dominio.com",
         "username":"novo_admin",
-        "password":"SenhaForte123",
         "system_role":"user",
-        "subscription_plan":"monthly"
+        "subscription_plan":"trial"
       }'
 ```
 
