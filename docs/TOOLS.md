@@ -78,10 +78,10 @@ Observação: gestão de membros continua restrita ao proprietário do espaço.
 
 Exemplos em HOWTOUSE_TOOLS.md.
 
-# Automata (Stubs com ACL)
+# Automata (ACL + Persistência Completa)
 
 - Base: `/user/spaces/{space_id}/automata`
-- Endpoints (stubs; valida ACL, sem persistência funcional):
+- Endpoints (persistência com ACL aplicada):
   - GET `/keys` → lista chaves do usuário (ACL: `space:read`).
   - POST `/keys` → cadastra chave (ACL: `space:write`).
   - GET `/prompts` → lista prompts do usuário (ACL: `space:read`).

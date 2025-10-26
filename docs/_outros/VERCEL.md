@@ -1,3 +1,23 @@
+# Com o terminal no diretório local do projeto, use o comando go:
+```bash
+go run ./cmd/server
+```
+
+# Executa o script que detecta a versão e instala a mais recente
+wget -qO- https://raw.githubusercontent.com/DieTime/go-up/master/go-up.sh | bash
+go mod tidy
+go mod download golang.org/x/crypto
+go mod download golang.org/x/sync
+go mod download golang.org/x/sys
+go mod download modernc.org/sqlite
+go mod tidy
+rm -rf node_modules
+
+# Com o terminal no diretório do projeto, use o comando dev:
+```bash
+vercel --prod
+```
+
 # Baixar as Variáveis de Ambiente (Opcional, mas Recomendado)
 
 ```bash
@@ -11,16 +31,6 @@ vercel env pull .env.preview
 # Com o terminal no diretório do projeto dev, use o comando dev:
 ```bash
 vercel dev
-```
-
-# Com o terminal no diretório do projeto, use o comando dev:
-```bash
-vercel --prod
-```
-
-# Com o terminal no diretório local do projeto, use o comando go:
-```bash
-go run ./cmd/server
 ```
 
 
