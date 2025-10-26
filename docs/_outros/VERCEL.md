@@ -1,135 +1,79 @@
-# Com o terminal no diretório local do projeto, use o comando go:
+Arquivo: docs/_outros/VERCEL.md
+Resumo: Guia de deploy/execução na Vercel e local, com dicas de build para Go e exemplos de teste.
+
+Manutenção: mantenha este documento alinhado ao `go.mod`, `vercel.json` e às rotas expostas. Remova qualquer marcador de conflito em caso de merges.
+
+# Execução local (sem Vercel)
+
 ```bash
 go run ./cmd/server
+
+# saúde
+curl -i http://localhost:8080/healthz
+
+# login admin
+curl -sS -X POST http://localhost:8080/admin/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"stringst"}'
 ```
 
-# Executa o script que detecta a versão e instala a mais recente
-wget -qO- https://raw.githubusercontent.com/DieTime/go-up/master/go-up.sh | bash
-go mod tidy
-go mod download golang.org/x/crypto
-go mod download golang.org/x/sync
-go mod download golang.org/x/sys
-go mod download modernc.org/sqlite
-go mod tidy
-rm -rf node_modules
+# Deploy na Vercel
 
-# Com o terminal no diretório do projeto, use o comando dev:
+Pré‑requisitos
+- `vercel` CLI instalado (local do projeto)
+- Variáveis de ambiente configuradas (DATABASE_URL, SECRET_KEY, SMTP, etc.)
+
+Baixar variáveis (opcional, recomendado)
+```bash
+vercel pull --environment=development && vercel env pull .env.development
+vercel pull --environment=preview && vercel env pull .env.preview
+```
+
+Publicar
 ```bash
 vercel --prod
 ```
 
-# Baixar as Variáveis de Ambiente (Opcional, mas Recomendado)
+# Testes em produção (Vercel)
 
+Com `vercel.json` atual, os rewrites mapeiam diretamente algumas rotas ao `api/index.go`:
+- Sem prefixo: `/healthz`, `/admin`, `/admin/...`
+- Com prefixo: `/api`, `/api/...` (equivalente)
+
+Exemplos:
 ```bash
-vercel pull --environment=development
-vercel env pull .env.development
+# Healthcheck
+curl -i https://<seu-projeto>.vercel.app/healthz
 
-vercel pull --environment=preview
-vercel env pull .env.preview
+# Login Admin (sem /api por causa dos rewrites)
+curl -sS -X POST https://<seu-projeto>.vercel.app/admin/auth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"stringst"}'
+
+# Password Recovery
+curl -sS -X POST https://<seu-projeto>.vercel.app/admin/auth/password-recovery \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com"}'
 ```
 
-# Com o terminal no diretório do projeto dev, use o comando dev:
+# Notas de Build (Go)
+
+- O projeto está pinado para Go 1.22 em `go.mod`. Dependências
+  (`modernc.org/sqlite`, `pgx`, `x/sys`, `x/sync`) foram fixadas para
+  evitar a exigência de Go 1.24 no ambiente da Vercel.
+- Evite usar `go mod tidy` no repositório com `node_modules` na raiz. O Go pode
+  tentar escanear este diretório e falhar. Sugestões:
+  - Não commitar `node_modules` na raiz do módulo Go; ou
+  - Rodar builds focados: `go build ./api` (sem `./...`); ou
+  - Usar `.vercelignore` para excluir `node_modules` do contexto.
+
+# Execução local via Vercel CLI
+
 ```bash
+# execução local do runtime vercel
 vercel dev
-```
 
-
-
-
-A Vercel é uma empresa americana com sede nos EUA, mas sua plataforma de hospedagem na nuvem não tem uma "localização" física única, pois opera em uma infraestrutura global de servidores distribuídos pela AWS (Amazon Web Services)
-
-Você pode ver a região do seu Vercel verificando o cabeçalho x-vercel-id da sua implantação, ou no arquivo vercel.json se você configurou funções serverless. Outra forma é checar a variável de ambiente VERCEL_REGION no ambiente de build. 
-
-
-https://vercel.com/luisfernandopereiragmailcoms-projects/auth-basics-api/settings/functions#function-region
-Washington, D.C., USA (East) - us-east-1 - iad1
-
-vercel dev
-Testes:
-curl -i http://localhost:3000/api/healthz
-Se ainda der erro de permissão no builder global
-
-Use o CLI local ao projeto (evita gravar em /usr/lib):
-npm init -y
-npm i -D vercel
+# se preferir via dependência local
+npm init -y && npm i -D vercel
 npx vercel dev
-Ou rode local sem Vercel
-
-
-```bash
-# local
-go run ./cmd/server 
-
-# -- assim funciona
-curl -i http://localhost:8080/healthz
-
-HTTP/1.1 200 OK
-Content-Type: application/json; charset=utf-8
-Date: Sun, 19 Oct 2025 16:55:44 GMT
-Content-Length: 57
-{"ok":true,"service":"auth_fast_api","status":"healthy"} -->
-
-# -- assim funciona
-curl -sS -X POST http://localhost:8080/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
-
-{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjA4OTQ3NzksInNpZCI6IjM5YWI4ZTFmLWY3NGYtNGE5My05NzU2LWNjOWE3ZDczOGU2YyIsInNybyI6InJvb3QiLCJzdWIiOiJhZG1pbnwxIiwid3NzIjp7fX0.RWEHh2Umy_g9oRQmn75wjrcNmLQIDV3W2k9jbXPnw-g","refresh_token":"34f62c88851441c127cea461d5c1fd9c70854914de261d0c6ef4fb2958450758","success":true}
-
-
-# na vercel
-
-# -- produção (Vercel)
-curl -i https://auth-fast-api.vercel.app/api/healthz
-
-HTTP/2 200 
-age: 0
-cache-control: public, max-age=0, must-revalidate
-content-type: application/json; charset=utf-8
-date: Sun, 19 Oct 2025 16:58:54 GMT
-server: Vercel
-strict-transport-security: max-age=63072000; includeSubDomains; preload
-x-vercel-cache: MISS
-x-vercel-id: gru1::iad1::zbqbh-1760893134194-354c4829fe19
-content-length: 57
-
-{"ok":true,"service":"auth_fast_api","status":"healthy"}
-
-
-<<<<<<< Updated upstream
-# -- assim funciona
-curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
-=======
-curl -sS -X POST https://auth-fast-api.vercel.app/api/admin/auth/token -H 'Content-Type: application/json' -d '{"username":"admin","password":"stringst"}'
->>>>>>> Stashed changes
-
-# -- assim funciona envia o e-mail
-curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
-{"sent":true,"success":true}
-
-# -- assim funciona envia o e-mail / reposta dá ok mas nao envia
-curl -sS -X POST https://auth-fast-api.vercel.app/api/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
-{"sent":true,"success":true}
-
-
-<<<<<<< Updated upstream
-# -- assim funciona envia o e-mail
-curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
-{"sent":true,"success":true}
-
-# -- assim funciona envia o e-mail / reposta dá ok mas nao envia
-curl -sS -X POST https://auth-fast-api.vercel.app/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"luis.fernando.pereira.procempa@gmail.com"}'
-{"sent":true,"success":true}
-=======
->>>>>>> Stashed changes
-
 ```
-
-
-```
-
-
-
-
-
-rodei
-npm init -y
-npm i -D vercel

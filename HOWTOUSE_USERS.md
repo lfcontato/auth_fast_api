@@ -115,3 +115,6 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
   -H 'Content-Type: application/json' \
   -d '{"code":"<NOVO_CODIGO>","password":"<NOVA_SENHA>"}' | jq .
 ```
+# Notas de campos (Users)
+- `tools_role`: default `guest`; opções: `guest|user|admin|root`.
+- `subscription_plan`: default `trial`; opções: `trial|monthly|semiannual|annual|lifetime`.

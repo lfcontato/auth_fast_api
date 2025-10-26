@@ -159,16 +159,20 @@ curl -s http://localhost:8080/openapi.json | jq .info
 - Método: POST
 - Rota: `/admin/`
 - Autenticação: `Authorization: Bearer <ACCESS_TOKEN>` (papel do solicitante deve ser superior ao `system_role` alvo)
-- Corpo (JSON):
-  ```json
-  {
-    "email":"novo@dominio.com",
-    "username":"novo_admin",
-    "password":"SenhaForte123",
-    "system_role":"user",
-    "subscription_plan":"monthly"
-  }
-  ```
+- Body (campos e defaults):
+  - `email` (obrigatório), `username` (obrigatório)
+  - `password` (opcional; se omitida, o sistema gera)
+  - `system_role` (opcional; default: `guest`; opções: `guest|user|admin|root`)
+  - `subscription_plan` (opcional; default: `trial`; opções: `trial|monthly|semiannual|annual|lifetime`)
+  - Exemplo:
+    ```json
+    {
+      "email":"novo@dominio.com",
+      "username":"novo_admin",
+      "system_role":"user",
+      "subscription_plan":"trial"
+    }
+    ```
 - 201 Created
   - Corpo:
   ```json
@@ -178,7 +182,7 @@ curl -s http://localhost:8080/openapi.json | jq .info
     "username":"novo_admin",
     "email":"novo@dominio.com",
     "system_role":"user",
-    "subscription_plan":"monthly",
+    "subscription_plan":"trial",
     "expires_at":"2025-11-19T00:00:00Z"
   }
   ```

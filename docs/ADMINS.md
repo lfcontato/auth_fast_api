@@ -105,20 +105,24 @@ Rotas e cURL
 - Criar novo administrador
   - POST `/admin`
   - Auth: `Authorization: Bearer <ACCESS_TOKEN>`
-  - Body:
+  - Body (campos e defaults):
+    - `email` (obrigatório), `username` (obrigatório)
+    - `password` (opcional; se omitida, o sistema gera)
+    - `system_role` (opcional; default: `guest`; opções: `guest|user|admin|root`)
+    - `subscription_plan` (opcional; default: `trial`; opções: `trial|monthly|semiannual|annual|lifetime`)
+  - Exemplo:
     - `{
          "email": "novo@dominio.com",
          "username": "novo_admin",
-         "password": "SenhaForte123",
          "system_role": "user",
-         "subscription_plan": "monthly"
+         "subscription_plan": "trial"
        }`
   - cURL:
-    - `curl -sS -X POST http://localhost:8080/admin -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user","subscription_plan":"monthly"}'`
+    - `curl -sS -X POST http://localhost:8080/admin -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user","subscription_plan":"trial"}'`
   - Observações:
     - Hierarquia: `guest < user < admin < root` (é preciso ter nível superior ao do alvo).
     - Se `password` for omitida, o sistema gera uma senha de 8 dígitos.
-    - Se `subscription_plan` for omitido, usa `monthly` (root no seed é sempre `lifetime`).
+    - Defaults: `system_role` default `guest`; `subscription_plan` default `trial` (root no seed é sempre `lifetime`).
     - Um e‑mail automático é enviado com senha/código/link de verificação.
   - Resposta (201):
     ```json
@@ -309,6 +313,7 @@ Backlog de rotas (a implementar)
 - [x] Alterar papel (system_role) (`PATCH /admin/{id}/system-role`).
 - [x] Alterar própria senha (`PATCH /admin/password`).
 - [x] Tokens de API (PAT) – criação e uso via Bearer.
+- [x] Segmentação por domínio concluída (handlers movidos para `pkg/httpapi/admin_handlers.go`).
 - [ ] Sessões: listagem/revogação explícita (por `sid`/`family_id`).
 - [ ] PAT: listagem/revogação e escopos; limites de uso e auditoria.
 - [ ] Auditoria de ações sensíveis (logs) e rate limit por rota.

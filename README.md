@@ -64,6 +64,15 @@ Notas:
 - Tools possuem bancos separados e migrações próprias; a inicialização ocorre no `init()` de httpapi.go com leitura de `FACIENDUM_DATABASE_URL` e `AUTOMATA_DATABASE_URL`.
 - ACL por UsersSpace é aplicada nas rotas de Tools e em operações de espaço/membership.
 
+Padrões e enumerações (Admins/Users)
+
+- Admins
+  - `system_role`: default `guest`; opções `guest|user|admin|root`.
+  - `subscription_plan`: default `trial`; opções `trial|monthly|semiannual|annual|lifetime`.
+- Users
+  - `tools_role`: default `guest`; opções `guest|user|admin|root`.
+  - `subscription_plan`: default `trial`; opções `trial|monthly|semiannual|annual|lifetime`.
+
 ---
 
 ### 1. Modelo de Dados e Estrutura (Completo)
@@ -249,6 +258,12 @@ Backlog (próximas entregas)
 - Refatoração do handler: `pkg/httpapi/httpapi.go` concentra as rotas; `api/index.go` (package `handler`) delega para ele (compatível com Vercel).
 - Rewrites no `vercel.json` habilitam `/healthz` e `/admin` sem prefixo `/api`.
 - Banco em serverless: fallback automático para SQLite em `/tmp` quando `DATABASE_URL` não estiver definido (dados efêmeros). Para produção, configure Postgres.
+
+Segmentação por domínio (concluída)
+
+- Handlers de Admin migrados para `pkg/httpapi/admin_handlers.go` e entry points mantidos em `pkg/httpapi/handlers_admin_entry.go`.
+- `pkg/httpapi/httpapi.go` mantém utilitários, init (DB/Redis/Email), JWT/ACL helpers e roteamento raiz; removeu corpos `_old` dos handlers de Admin.
+- Rotas por domínio: Users (`router_users.go`/`users_handlers.go`), UsersSpaces (`router_spaces.go`/`spaces_handlers.go`), Tools (`router_tools_faciendum.go`, `router_tools_automata.go`).
 
 ### Novidades: OpenAPI e Tokens de API (integrações)
 

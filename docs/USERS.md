@@ -9,8 +9,8 @@ Navegação: [Admins](ADMINS.md) · [Tools](TOOLS.md) · [Como usar (Users)](../
 
 - Tabela `users`:
   - `id`, `email` (único), `username` (único), `password_hash`.
-  - `tools_role`: `admin|user|guest` (global, hoje usado p/ criação de UsersSpaces).
-  - `subscription_plan`: `minute|hourly|daily|trial|monthly|semiannual|annual|lifetime`.
+  - `tools_role`: `guest|user|admin|root` (default: `guest`).
+  - `subscription_plan`: `trial|monthly|semiannual|annual|lifetime` (default: `trial`).
   - `expires_at`: limite global do plano; tokens são clampados a este limite quando aplicável.
   - `is_verified`: exige verificação antes de login.
 
