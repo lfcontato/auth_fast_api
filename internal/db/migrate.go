@@ -60,6 +60,59 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
             );`,
             `CREATE INDEX IF NOT EXISTS idx_api_tokens_admin_id ON admins_api_tokens(admin_id);`,
             `CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON admins_api_tokens(token_hash);`,
+
+            // Users entities (paralelo a admins)
+            `CREATE TABLE IF NOT EXISTS users (
+                id BIGSERIAL PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                tools_role TEXT NOT NULL DEFAULT 'user',
+                subscription_plan TEXT NOT NULL DEFAULT 'monthly',
+                expires_at TIMESTAMPTZ NULL,
+                is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );`,
+            `CREATE TABLE IF NOT EXISTS users_sessions_local (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(id),
+                session_id TEXT NOT NULL UNIQUE,
+                family_id TEXT NOT NULL,
+                refresh_token_hash TEXT NOT NULL,
+                expires_at TIMESTAMPTZ NOT NULL,
+                revoked_at TIMESTAMPTZ NULL,
+                revoked_reason TEXT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );`,
+            `CREATE INDEX IF NOT EXISTS idx_users_sessions_user_id ON users_sessions_local(user_id);`,
+            `CREATE TABLE IF NOT EXISTS users_verifications (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(id),
+                code TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NULL,
+                consumed_at TIMESTAMPTZ NULL
+            );`,
+            `CREATE INDEX IF NOT EXISTS idx_users_verifications_user_id ON users_verifications(user_id);`,
+            // UsersSpaces (hash único)
+            `CREATE TABLE IF NOT EXISTS users_spaces (
+                id BIGSERIAL PRIMARY KEY,
+                owner_user_id BIGINT NOT NULL REFERENCES users(id),
+                name TEXT NOT NULL,
+                hash TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );`,
+            `CREATE TABLE IF NOT EXISTS users_spaces_members (
+                id BIGSERIAL PRIMARY KEY,
+                space_id BIGINT NOT NULL REFERENCES users_spaces(id),
+                user_id BIGINT NOT NULL REFERENCES users(id),
+                role TEXT NOT NULL DEFAULT 'guest',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(space_id, user_id)
+            );`,
         }
     } else {
         stmts = []string{
@@ -115,6 +168,66 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
             );`,
             `CREATE INDEX IF NOT EXISTS idx_api_tokens_admin_id ON admins_api_tokens(admin_id);`,
             `CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON admins_api_tokens(token_hash);`,
+
+            // Users entities (paralelo a admins)
+            `CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                tools_role TEXT NOT NULL DEFAULT 'user',
+                subscription_plan TEXT NOT NULL DEFAULT 'monthly',
+                expires_at TIMESTAMP NULL,
+                is_verified BOOLEAN NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );`,
+            `CREATE TABLE IF NOT EXISTS users_sessions_local (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                family_id TEXT NOT NULL,
+                refresh_token_hash TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                revoked_at TIMESTAMP NULL,
+                revoked_reason TEXT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(session_id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );`,
+            `CREATE INDEX IF NOT EXISTS idx_users_sessions_user_id ON users_sessions_local(user_id);`,
+            `CREATE TABLE IF NOT EXISTS users_verifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                code TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NULL,
+                consumed_at TIMESTAMP NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );`,
+            `CREATE INDEX IF NOT EXISTS idx_users_verifications_user_id ON users_verifications(user_id);`,
+            // UsersSpaces (hash único)
+            `CREATE TABLE IF NOT EXISTS users_spaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                hash TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(hash),
+                FOREIGN KEY(owner_user_id) REFERENCES users(id)
+            );`,
+            `CREATE TABLE IF NOT EXISTS users_spaces_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                space_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                role TEXT NOT NULL DEFAULT 'guest',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(space_id, user_id),
+                FOREIGN KEY(space_id) REFERENCES users_spaces(id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );`,
         }
     }
 
@@ -129,10 +242,19 @@ func Migrate(ctx context.Context, sqldb *sql.DB) error {
         _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'monthly'`)
         _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL`)
         _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins_verifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'monthly'`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users ADD COLUMN IF NOT EXISTS tools_role TEXT NOT NULL DEFAULT 'user'`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users_verifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL`)
     } else {
         _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN subscription_plan TEXT NOT NULL DEFAULT 'monthly'`)
         _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins ADD COLUMN expires_at TIMESTAMP NULL`)
         _, _ = sqldb.ExecContext(ctx, `ALTER TABLE admins_verifications ADD COLUMN expires_at TIMESTAMP NULL`)
+        // SQLite não suporta IF NOT EXISTS em ALTER COLUMN, tentativas best-effort
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users ADD COLUMN subscription_plan TEXT NOT NULL DEFAULT 'monthly'`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users ADD COLUMN expires_at TIMESTAMP NULL`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users ADD COLUMN tools_role TEXT NOT NULL DEFAULT 'user'`)
+        _, _ = sqldb.ExecContext(ctx, `ALTER TABLE users_verifications ADD COLUMN expires_at TIMESTAMP NULL`)
     }
     return nil
 }

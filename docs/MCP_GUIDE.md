@@ -181,4 +181,4 @@ curl -sS -X PATCH "$BASE/admin/password" \
 
 - A cada nova funcionalidade/endpoint da API, adicione o(s) exemplo(s) cURL correspondentes aqui.
 - Se rotas forem renomeadas/movidas, atualize as instruções de base (local e Vercel) e exemplos.
-
+Navegação: [Admins](ADMINS.md) · [Usuários](USERS.md) · [Tools](TOOLS.md)

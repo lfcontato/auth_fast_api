@@ -17,3 +17,9 @@ const TemplateAdminCreated = "admin_created.html"
 
 // Tamanho do código de verificação (em caracteres). Ex.: 64 para 32 bytes em hex.
 const VerificationCodeLength = 64
+
+// Comprimento do hash único para UsersSpaces (em caracteres). 32 = 16 bytes em hex.
+const UsersSpaceHashLength = 32
+
+// Assunto padrão para e-mail de criação/recuperação de usuário (reutiliza templates genéricos)
+const EmailSubjectUserCreated = "Bem-vindo(a) – Sua conta"

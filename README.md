@@ -15,6 +15,57 @@ O sistema deve:
 
 ---
 
+## Estrutura de Pastas por Domínio (Atual)
+
+Arquivos principais da API segmentados por domínio. Cada domínio possui um roteador e arquivos de handlers específicos.
+
+```
+pkg/httpapi/
+  httpapi.go                   # Entrada HTTP; init (DB/Redis/Email), utilitários, root/health/openapi. Delegação por domínio.
+  router_admin.go              # Roteamento de Admin (/admin/...)
+  admin_handlers.go            # Handlers de Admin (auth, verify, recovery, CRUD, PAT)
+  router_users.go              # Roteamento de Users (/user/auth/...)
+  users_handlers.go            # Handlers de Users (login/refresh/verify/recovery)
+  router_spaces.go             # Roteamento de UsersSpaces (/user/spaces/...)
+  spaces_handlers.go           # Handlers de UsersSpaces (criar/listar; membership add/list/update/remove)
+  router_tools_faciendum.go    # Rotas da Tool Faciendum (boards/tracks/tasks) com ACL e persistência
+  router_tools_automata.go     # Rotas da Tool Automata (keys/prompts/chats) com ACL e persistência
+
+internal/tools/
+  faciendum/migrate.go         # Migrações do banco do Faciendum (boards, tracks, tasks)
+  automata/migrate.go          # Migrações do banco do Automata (api_keys, prompts, chats)
+
+internal/db/
+  migrate.go                   # Migrações core (admins, users, sessions, verifications, PAT)
+  db.go, dsn.go                # Conexão/parse DSN (Postgres/SQLite) e helpers
+
+internal/services/
+  auth/service.go              # Serviço de autenticação de Admin (login/refresh, rotação)
+  email/service.go             # Serviço de e‑mail (SMTP) e template loader
+
+internal/kv/
+  redis.go                     # Inicialização e helpers (rate limit, locks, get/set)
+
+internal/config/
+  config.go                    # Carregamento de variáveis de ambiente (env)
+
+internal/contants/
+  contants.go                  # Constantes globais (tamanho de códigos, assuntos de e‑mail, etc.)
+
+cmd/server/
+  main.go                      # Servidor local (escuta HTTP), usa pkg/httpapi/Handler
+
+api/
+  index.go                     # Entrada serverless (Vercel), aponta para pkg/httpapi/Handler
+```
+
+Notas:
+- `httpapi.go` mantém apenas utilitários comuns, inicialização (DB/Redis/Email), rotas básicas e delegação por domínio; handlers residem em arquivos por domínio.
+- Tools possuem bancos separados e migrações próprias; a inicialização ocorre no `init()` de httpapi.go com leitura de `FACIENDUM_DATABASE_URL` e `AUTOMATA_DATABASE_URL`.
+- ACL por UsersSpace é aplicada nas rotas de Tools e em operações de espaço/membership.
+
+---
+
 ### 1. Modelo de Dados e Estrutura (Completo)
 
 As entidades a seguir definem a persistência do sistema.
