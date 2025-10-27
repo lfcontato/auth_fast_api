@@ -7,7 +7,9 @@ import (
     "database/sql"
     "encoding/hex"
     "encoding/json"
+    "fmt"
     "net/http"
+    "net/url"
     "strconv"
     "strings"
     "time"
@@ -95,12 +97,31 @@ func userCreateHandler(w http.ResponseWriter, r *http.Request) {
         _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), newID, code, time.Now().Add(ttl))
         // E‑mail de boas‑vindas/verificação (melhor esforço)
         if mailer != nil {
+            // Monta link de verificação que aponta para o endpoint de verificação por link
+            base := strings.TrimRight(cfg.PublicBaseURL, "/")
+            if base == "" {
+                base = strings.TrimRight(requestBaseURL(r), "/")
+            }
+            var verifyURL string
+            pathPrefix := ""
+            if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
+            if base != "" {
+                q := url.Values{}
+                // Aceita login por e-mail ou username no endpoint
+                q.Set("login", req.Email)
+                q.Set("code", code)
+                verifyURL = base + pathPrefix + "/user/auth/verify-link?" + q.Encode()
+            }
             data := map[string]any{
                 "Title":             "Bem-vindo(a)",
-                "Message":           "Use o código para verificar sua conta.",
+                "Message":           "Use o botão abaixo ou o código para verificar sua conta.",
                 "Email":             req.Email,
                 "Username":          req.Username,
                 "VerificationCode":  code,
+                // Template genérico suporta CTA via ActionURL/ActionText e nota extra
+                "ActionURL":         verifyURL,
+                "ActionText":        "Verificar conta",
+                "ExtraNote":         fmt.Sprintf("Seu código de verificação: %s", code),
             }
             ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
             defer cancel()
@@ -353,7 +374,28 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
     _ = tx.Commit()
     // email
     if mailer != nil {
-        data := map[string]any{ "Title": "Recuperação de senha", "Message": "Use a nova senha e o código para verificar sua conta.", "Email": req.Email, "Username": username, "Password": newPass, "VerificationCode": code }
+        base := strings.TrimRight(cfg.PublicBaseURL, "/")
+        if base == "" { base = strings.TrimRight(requestBaseURL(r), "/") }
+        var verifyURL string
+        pathPrefix := ""
+        if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
+        if base != "" {
+            q := url.Values{}
+            q.Set("login", req.Email)
+            q.Set("code", code)
+            verifyURL = base + pathPrefix + "/user/auth/verify-link?" + q.Encode()
+        }
+        data := map[string]any{
+            "Title":             "Recuperação de senha",
+            "Message":           "Use a nova senha e o código para verificar sua conta.",
+            "Email":             req.Email,
+            "Username":          username,
+            "Password":          newPass,
+            "VerificationCode":  code,
+            "ActionURL":         verifyURL,
+            "ActionText":        "Verificar conta",
+            "ExtraNote":         fmt.Sprintf("Seu código de verificação: %s", code),
+        }
         ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second); defer cancel()
         _ = mailer.Send(ctx, emailsvc.Params{To: []string{req.Email}, Subject: contants.EmailSubjectPasswordRecovery, TemplateName: cfg.EmailTemplateName, Data: data})
     }
@@ -380,7 +422,27 @@ func userAuthVerificationCodeHandler(w http.ResponseWriter, r *http.Request) {
     code, _ := generateVerificationCode(contants.VerificationCodeLength)
     _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), userID, code, time.Now().Add(time.Duration(cfg.VerifyCodeTTLHours)*time.Hour))
     if mailer != nil {
-        data := map[string]any{ "Title": "Verificação de conta", "Message": "Seu código de verificação:", "Email": email, "Username": username, "VerificationCode": code }
+        base := strings.TrimRight(cfg.PublicBaseURL, "/")
+        if base == "" { base = strings.TrimRight(requestBaseURL(r), "/") }
+        var verifyURL string
+        pathPrefix := ""
+        if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
+        if base != "" {
+            q := url.Values{}
+            q.Set("login", email)
+            q.Set("code", code)
+            verifyURL = base + pathPrefix + "/user/auth/verify-link?" + q.Encode()
+        }
+        data := map[string]any{
+            "Title":            "Verificação de conta",
+            "Message":          "Clique no botão abaixo ou use o código para verificar sua conta.",
+            "Email":            email,
+            "Username":         username,
+            "VerificationCode": code,
+            "ActionURL":        verifyURL,
+            "ActionText":       "Verificar conta",
+            "ExtraNote":        fmt.Sprintf("Seu código de verificação: %s", code),
+        }
         ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second); defer cancel()
         _ = mailer.Send(ctx, emailsvc.Params{To: []string{email}, Subject: contants.EmailSubjectUserCreated, TemplateName: cfg.EmailTemplateName, Data: data})
     }

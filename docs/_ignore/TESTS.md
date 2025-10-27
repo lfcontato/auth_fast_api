@@ -18,6 +18,12 @@ Como usar
 3) Clique em "Send Request" acima de cada requisição
 4) Para o fluxo de auth: rode primeiro `@login`, depois `@refresh` (ele referencia o `refresh_token` do login automaticamente).
 
+# Criar usuario
+curl -X POST https://auth-fast-api.vercel.app/api/user -H 'Content-Type: application/json' -d '{ "email":"luis.fernando.pereira.procempa@gmail.com", "username":"lfcontato", "password":"8wqqqbbq", "confirm_password":"8wqqqbbq" }'
+
+# Reenviar o Código
+curl -X POST https://auth-fast-api.vercel.app/api/user/auth/verification-code -H 'Content-Type: application/json' -d '{"login":"lfcontato"}'
+
 
 curl -X POST http://localhost:8080/user/auth/token -H 'Content-Type: application/json' -d '{"username":"usuario","password":"MinhaSenha123!"}'
 curl -X POST https://auth-fast-api.vercel.app/user/auth/token -H 'Content-Type: application/json' -d '{"username":"usuario","password":"MinhaSenha123!"}'
