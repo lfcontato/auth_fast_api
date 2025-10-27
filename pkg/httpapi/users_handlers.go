@@ -44,6 +44,7 @@ func userCreateHandler(w http.ResponseWriter, r *http.Request) {
         Username        string `json:"username"`
         Password        string `json:"password"`
         ConfirmPassword string `json:"confirm_password"`
+        RedirectURI     string `json:"redirect_uri"`
     }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_JSON", "message": "JSON inválido"})
@@ -102,7 +103,7 @@ func userCreateHandler(w http.ResponseWriter, r *http.Request) {
         // E‑mail de boas‑vindas/verificação (melhor esforço)
         if mailer != nil && !isTestEmail(req.Email) {
             // Monta link de verificação que aponta para o endpoint de verificação por link
-            base := strings.TrimRight(selectRedirectBaseURL(r), "/")
+            base := resolveBaseForEmail(r, req.RedirectURI)
             var verifyURL string
             pathPrefix := ""
             if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
@@ -395,7 +396,7 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
     _ = tx.Commit()
     // email
     if mailer != nil && !isTestEmail(req.Email) {
-        base := strings.TrimRight(selectRedirectBaseURL(r), "/")
+        base := resolveBaseForEmail(r, "")
         var verifyURL string
         pathPrefix := ""
         if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
@@ -467,7 +468,7 @@ func userAuthVerificationCodeHandler(w http.ResponseWriter, r *http.Request) {
         _, _ = sqldb.Exec(db.Rebind(`UPDATE users_verifications SET consumed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND consumed_at IS NULL AND code <> ?`), userID, code)
     }
     if mailer != nil {
-        base := strings.TrimRight(selectRedirectBaseURL(r), "/")
+        base := resolveBaseForEmail(r, "")
         var verifyURL string
         pathPrefix := ""
         if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }

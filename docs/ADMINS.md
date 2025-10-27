@@ -110,6 +110,7 @@ Rotas e cURL
     - `password` (opcional; se omitida, o sistema gera)
     - `system_role` (opcional; default: `guest`; opções: `guest|user|admin|root`)
     - `subscription_plan` (opcional; default: `trial`; opções: `trial|monthly|semiannual|annual|lifetime`)
+    - `redirect_uri` (opcional; define a base do link de verificação enviado por e‑mail)
   - Exemplo:
     - `{
          "email": "novo@dominio.com",
@@ -118,7 +119,7 @@ Rotas e cURL
          "subscription_plan": "trial"
        }`
   - cURL:
-    - `curl -sS -X POST http://localhost:8080/admin -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user","subscription_plan":"trial"}'`
+    - `curl -sS -X POST http://localhost:8080/admin -H "Authorization: Bearer $ACCESS" -H 'Content-Type: application/json' -d '{"email":"novo@dominio.com","username":"novo_admin","password":"SenhaForte123","system_role":"user","subscription_plan":"trial","redirect_uri":"https://auth-fast-admins.vercel.app"}'`
   - Observações:
     - Hierarquia: `guest < user < admin < root` (é preciso ter nível superior ao do alvo).
     - Se `password` for omitida, o sistema gera uma senha de 8 dígitos.
@@ -281,7 +282,11 @@ Rotas e cURL
 
 Notas importantes
 
-- Base de URL nos e‑mails: se `PUBLIC_BASE_URL` estiver definido, ele é usado; caso contrário, a API deduz a base a partir dos cabeçalhos da requisição (`X-Forwarded-Proto`/`X-Forwarded-Host` ou `Host`). Isso torna o deploy portátil em qualquer hospedagem/reverso.
+- Base de URL nos e‑mails (verificação/recuperação), ordem de precedência:
+  1) `redirect_uri` enviado no payload (quando presente em criação de admin).
+  2) Primeira origem válida de `ALLOWED_REDIRECT_URIS` (quando definido no ambiente).
+  3) `PUBLIC_BASE_URL`.
+  4) URL pública da própria API (deduzida de `X-Forwarded-*` ou `Host`).
 - O tamanho do código de verificação é definido em `internal/contants/contants.go` (`VerificationCodeLength`, padrão 64).
 - Após verificação bem‑sucedida, `admins.is_verified` = 1 e o código é consumido.
 

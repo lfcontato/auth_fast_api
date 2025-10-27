@@ -388,6 +388,7 @@ func adminCreateHandler_impl(w http.ResponseWriter, r *http.Request) {
         Password         string `json:"password"`
         SystemRole       string `json:"system_role"`
         SubscriptionPlan string `json:"subscription_plan"`
+        RedirectURI      string `json:"redirect_uri"`
     }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_003", "message": "JSON inválido"})
@@ -470,7 +471,7 @@ func adminCreateHandler_impl(w http.ResponseWriter, r *http.Request) {
 
     // Envia e-mail de criação (síncrono em serverless)
     if mailer != nil && !isTestEmail(req.Email) {
-        verifyURL := buildVerifyURL(r, code)
+        verifyURL := buildVerifyURLWithOverride(r, code, req.RedirectURI)
         tmpl := cfg.AdminCreatedTemplate
         if strings.TrimSpace(tmpl) == "" { tmpl = cfg.EmailTemplateName }
         data := map[string]any{

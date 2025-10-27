@@ -72,6 +72,19 @@ curl -X POST http://localhost:8080/user \
   }'
 ```
 
+Opcional: indicar a base do link de verificação a ser enviada por e‑mail via `redirect_uri`:
+```
+curl -X POST http://localhost:8080/user \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email":"user@example.com",
+    "username":"usuario",
+    "password":"MinhaSenha123!",
+    "confirm_password":"MinhaSenha123!",
+    "redirect_uri":"https://auth-fast-users.vercel.app"
+  }'
+```
+
 # Criar UsersSpace (requer tools_role=admin)
 ```
 ACCESS_TOKEN="<JWT_DO_LOGIN>"
@@ -137,10 +150,11 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
 
 # E-mails de verificação
 - O e‑mail de boas‑vindas envia um código e um link de verificação (botão “Verificar conta”).
-- A base do link é escolhida assim:
-  1) Se `ALLOWED_REDIRECT_URIS` estiver definida e a requisição tiver `Origin/Referer` que bata com a lista, usa essa origem (frontend).
-  2) Senão, usa `PUBLIC_BASE_URL`.
-  3) Se vazio, usa a URL pública da própria API.
+- A base do link é escolhida nesta ordem:
+  1) Se o payload tiver `redirect_uri`, usa essa URL como base.
+  2) Senão, se `ALLOWED_REDIRECT_URIS` estiver definida, usa a primeira origem válida da lista.
+  3) Senão, usa `PUBLIC_BASE_URL`.
+  4) Se ainda vazio, usa a URL pública da própria API.
 - Em Vercel, se a chamada for feita para `/api/...`, o link conterá `/api` para garantir funcionamento.
 - Ambiente de teste: ao criar usuário com e‑mail terminando em `@domain.com`, o sistema não enviará e‑mail (apenas grava o código). Use os endpoints de verificação para completar o fluxo.
  - Em ambiente de teste, o reenvio para e‑mails `@domain.com` também não envia e‑mail; o código fica disponível via banco e pode ser usado pelos endpoints de verificação.

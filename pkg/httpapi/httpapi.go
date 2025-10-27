@@ -2484,13 +2484,17 @@ func generateStrongPassword(n int) string {
 
 // buildVerifyURL monta a URL pública para verificação, se base estiver configurada.
 func buildVerifyURL(r *http.Request, code string) string {
-    if strings.TrimSpace(code) == "" {
-        return ""
-    }
-    base := strings.TrimRight(selectRedirectBaseURL(r), "/")
-    if base == "" {
-        return ""
-    }
+    if strings.TrimSpace(code) == "" { return "" }
+    base := resolveBaseForEmail(r, "")
+    if base == "" { return "" }
+    return base + "/admin/code-verified/" + code
+}
+
+// buildVerifyURLWithOverride permite informar uma base (redirect_uri) explícita para compor o link.
+func buildVerifyURLWithOverride(r *http.Request, code, override string) string {
+    if strings.TrimSpace(code) == "" { return "" }
+    base := resolveBaseForEmail(r, override)
+    if base == "" { return "" }
     return base + "/admin/code-verified/" + code
 }
 
@@ -2546,6 +2550,35 @@ func selectRedirectBaseURL(r *http.Request) string {
     if base != "" { return base }
     // 3) Fallback: URL da própria API
     return strings.TrimRight(requestBaseURL(r), "/")
+}
+
+// sanitizeBaseURL extrai "scheme://host" e remove sufixos/paths/query/fragment.
+func sanitizeBaseURL(raw string) string {
+    s := strings.TrimSpace(raw)
+    if s == "" { return "" }
+    u, err := url.Parse(s)
+    if err != nil || u.Scheme == "" || u.Host == "" { return "" }
+    return strings.TrimRight(u.Scheme+"://"+u.Host, "/")
+}
+
+// firstAllowedRedirectFromEnv retorna a primeira origem válida definida em ALLOWED_REDIRECT_URIS.
+func firstAllowedRedirectFromEnv() string {
+    csv := strings.TrimSpace(cfg.AllowedRedirectURIs)
+    if csv == "" { return "" }
+    for _, t := range strings.Split(csv, ",") {
+        if b := sanitizeBaseURL(t); b != "" { return b }
+    }
+    return ""
+}
+
+// resolveBaseForEmail aplica a regra solicitada:
+// - Se payload (override) trouxer redirect_uri, usa-o;
+// - Senão, usa a primeira URL de ALLOWED_REDIRECT_URIS, se houver;
+// - Se ainda vazio, usa a própria lógica de fallback (PUBLIC_BASE_URL -> requestBaseURL).
+func resolveBaseForEmail(r *http.Request, override string) string {
+    if b := sanitizeBaseURL(override); b != "" { return b }
+    if b := firstAllowedRedirectFromEnv(); b != "" { return b }
+    return strings.TrimRight(selectRedirectBaseURL(r), "/")
 }
 
 // clientIP extrai IP do X-Forwarded-For ou RemoteAddr

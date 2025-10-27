@@ -32,6 +32,16 @@ curl -X POST http://localhost:8080/api/user \
   -H 'Content-Type: application/json' \
   -d '{ "email":"user001@domain.com", "username":"user001", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
 
+
+curl -X POST https://auth-fast-api.vercel.app/api/user \
+  -H 'Content-Type: application/json' \
+  -d '{ "email":"user000@domain.com", "username":"user000", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
+
+
+curl -X POST https://auth-fast-api.vercel.app/api/user \
+  -H 'Content-Type: application/json' \
+  -d '{ "email":"user001@domain.com", "username":"user001", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
+
 curl -X POST https://auth-fast-api.vercel.app/api/user \
   -H 'Content-Type: application/json' \
   -d '{ "email":"user002@domain.com", "username":"user002", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
@@ -54,10 +64,10 @@ curl -X POST https://auth-fast-api.vercel.app/api/user/auth/token \
 
 ## Fluxo de testes (local)
 
-# 1) Criar usuário
+# 1) Criar usuário (com redirect_uri opcional)
 curl -X POST http://localhost:8080/user \
   -H 'Content-Type: application/json' \
-  -d '{ "email":"user@example.com", "username":"usuario", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
+  -d '{ "email":"user@example.com", "username":"usuario", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!", "redirect_uri":"https://auth-fast-users.vercel.app" }'
 
 # 2) Reenviar código
 curl -X POST http://localhost:8080/user/auth/verification-code \
@@ -71,3 +81,7 @@ curl "http://localhost:8080/user/auth/verify-link?login=usuario&code=CODE"
 curl -X POST http://localhost:8080/user/auth/token \
   -H 'Content-Type: application/json' \
   -d '{"username":"usuario","password":"MinhaSenha123!"}'
+
+
+
+
