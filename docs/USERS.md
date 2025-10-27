@@ -36,6 +36,10 @@ Navegação: [Admins](ADMINS.md) · [Tools](TOOLS.md) · [Como usar (Users)](HOW
 - GET `/user/auth/verify-link?login=&code=` – confirma via link público (por `username` ou `email`).
 - POST `/user/auth/password-recovery` – redefine senha e envia código por e‑mail.
 - POST `/user/auth/verification-code` – reenvia código de verificação (por `login`).
+  - Regras: reaproveita o último código válido; se não houver, gera um novo e invalida códigos anteriores ainda não consumidos.
+  - Rate limit:
+    - Por IP: `VERIFY_RESEND_IP_LIMIT` por `VERIFY_RESEND_IP_WINDOW_MINUTES` (padrão: herda RECOVERY_IP_*)
+    - Por login/e-mail: `VERIFY_RESEND_LOGIN_LIMIT` por `VERIFY_RESEND_LOGIN_WINDOW_MINUTES` (padrão: herda RECOVERY_EMAIL_*)
 - POST `/user` – cria usuário: `{ email, username, password, confirm_password }`. Senhas devem coincidir; aplica política de senha. Cria conta `is_verified=false` e envia código de verificação por e‑mail.
 
 Observação (Vercel): ao consumir pela Vercel, use o prefixo `/api` (ex.: `/api/user/auth/token`). Após o próximo deploy, rotas sem `/api` também funcionarão por rewrite.
@@ -87,4 +91,4 @@ Política de senha
 
 Ambiente de teste (@domain.com)
 
-- Na criação de usuários, se o e‑mail terminar com `@domain.com`, o sistema não envia e‑mail (apenas registra o código no banco). Útil para testes.
+- Na criação e no reenvio de código de usuários, se o e‑mail terminar com `@domain.com`, o sistema não envia e‑mail (apenas registra o código no banco). Útil para testes.

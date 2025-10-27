@@ -25,10 +25,24 @@ Notas de campos e defaults (Regra)
 - `password`: opcional; se omitida, o sistema gera.
 - `system_role`: opcional; default `guest`; enum `guest|user|admin|root`.
 - `subscription_plan`: opcional; default `trial`; enum `trial|monthly|semiannual|annual|lifetime`.
-  
+
 Ambiente de teste
 
 - Se o e‑mail informado terminar em `@domain.com`, o envio de e‑mail de criação é suprimido (não enviado), útil para testes.
+
+# Reenviar Código de Verificação (Admin)
+
+```bash
+curl -sS -X POST http://localhost:8080/admin/auth/verification-code \
+  -H 'Content-Type: application/json' \
+  -d '{"login":"root"}' | jq .
+```
+
+Notas
+- Reaproveita o último código válido (24h por padrão) ou cria um novo e invalida anteriores.
+- Rate limit:
+  - Por IP: `VERIFY_RESEND_IP_LIMIT`/`VERIFY_RESEND_IP_WINDOW_MINUTES`
+  - Por login/e-mail: `VERIFY_RESEND_LOGIN_LIMIT`/`VERIFY_RESEND_LOGIN_WINDOW_MINUTES`
 
 # Alterar Papel
 ```bash

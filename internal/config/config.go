@@ -73,6 +73,13 @@ type Config struct {
     // URIs de redirecionamento autorizados (origens permitidas), separados por vírgula.
     // Ex.: https://app.seusite.com, https://localhost:3000
     AllowedRedirectURIs string
+
+    // Rate limit para reenvio de código de verificação
+    // Se não definidos, herdam dos limites de recuperação (RECOVERY_*)
+    VerifyResendIPLimit            int
+    VerifyResendIPWindowMinutes    int
+    VerifyResendLoginLimit         int
+    VerifyResendLoginWindowMinutes int
 }
 
 // getenv retorna o valor de uma variável de ambiente, ou o default se não definido.
@@ -156,5 +163,11 @@ func Load() *Config {
         Version:         getenv("SERVICE_VERSION", "0.1.0"),
         PublicBaseURL:   getenv("PUBLIC_BASE_URL", ""),
         AllowedRedirectURIs: getenv("ALLOWED_REDIRECT_URIS", ""),
+
+        // Reenvio de código de verificação (herda RECOVERY_* se não definido)
+        VerifyResendIPLimit:            getenvInt("VERIFY_RESEND_IP_LIMIT", getenvInt("RECOVERY_IP_LIMIT", 10)),
+        VerifyResendIPWindowMinutes:    getenvInt("VERIFY_RESEND_IP_WINDOW_MINUTES", getenvInt("RECOVERY_IP_WINDOW_MINUTES", 60)),
+        VerifyResendLoginLimit:         getenvInt("VERIFY_RESEND_LOGIN_LIMIT", getenvInt("RECOVERY_EMAIL_LIMIT", 3)),
+        VerifyResendLoginWindowMinutes: getenvInt("VERIFY_RESEND_LOGIN_WINDOW_MINUTES", getenvInt("RECOVERY_EMAIL_WINDOW_MINUTES", 15)),
     }
 }

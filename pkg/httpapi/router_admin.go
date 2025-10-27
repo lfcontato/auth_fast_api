@@ -18,6 +18,8 @@ func handleAdminRoutes(w http.ResponseWriter, r *http.Request) bool {
         adminHandleMFAVerify(w, r); return true
     case path == "/admin/auth/password-recovery" && r.Method == http.MethodPost:
         adminHandlePasswordRecovery(w, r); return true
+    case path == "/admin/auth/verification-code" && r.Method == http.MethodPost:
+        adminHandleVerificationCodeResend(w, r); return true
     case strings.HasPrefix(path, "/admin/auth/verify-code/") && r.Method == http.MethodPost:
         code := strings.TrimPrefix(path, "/admin/auth/verify-code/")
         adminHandleVerifyCodeURL(w, r, code); return true

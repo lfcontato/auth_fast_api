@@ -37,6 +37,11 @@ func adminUpdateSystemRoleHandler(w http.ResponseWriter, r *http.Request)       
 func adminChangeOwnPasswordHandler(w http.ResponseWriter, r *http.Request)         { adminChangeOwnPasswordHandler_impl(w, r) }
 func adminCreateAPITokenHandler(w http.ResponseWriter, r *http.Request)            { adminCreateAPITokenHandler_impl(w, r) }
 
+// adminAuthVerificationCodeResendHandler reenvia (ou reutiliza) código de verificação para admin não verificado.
+func adminAuthVerificationCodeResendHandler(w http.ResponseWriter, r *http.Request) {
+    adminAuthVerificationCodeResendHandler_impl(w, r)
+}
+
 // Implementações (copiadas do httpapi.go)
 func adminAuthTokenHandler_impl(w http.ResponseWriter, r *http.Request) {
     if service == nil || sqldb == nil {
@@ -550,6 +555,78 @@ func adminAuthVerifyHandler_impl(w http.ResponseWriter, r *http.Request) {
         return
     }
     writeJSON(w, http.StatusOK, map[string]any{"success": true, "verified": true})
+}
+
+// adminAuthVerificationCodeResendHandler_impl: POST /admin/auth/verification-code
+// Regras:
+//  - Rate limit por IP e por login (usa VERIFY_RESEND_* ou herda RECOVERY_*)
+//  - Reaproveita último código válido; se inexistente/expirado, gera novo e invalida anteriores
+//  - Envia e-mail com link + código, exceto em e-mails de teste (@domain.com)
+func adminAuthVerificationCodeResendHandler_impl(w http.ResponseWriter, r *http.Request) {
+    // Throttle por IP e por login
+    ip := clientIP(r)
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:adminverifyresend:ip:"+ip, int64(cfg.VerifyResendIPLimit), time.Duration(cfg.VerifyResendIPWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas solicitações. Tente mais tarde."})
+        return
+    }
+    var req struct{ Login string `json:"login"` }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Login) == "" {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_014", "message": "login ausente"})
+        return
+    }
+    login := strings.ToLower(strings.TrimSpace(req.Login))
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:adminverifyresend:login:"+login, int64(cfg.VerifyResendLoginLimit), time.Duration(cfg.VerifyResendLoginWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_EMAIL", "message": "Limite de reenvio excedido. Tente mais tarde."})
+        return
+    }
+
+    // Busca admin
+    var (
+        adminID int64
+        email   string
+        username string
+        verified bool
+    )
+    if err := sqldb.QueryRow(db.Rebind(`SELECT id, email, username, is_verified FROM admins WHERE username = ? OR email = ? LIMIT 1`), login, login).Scan(&adminID, &email, &username, &verified); err != nil {
+        writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true})
+        return
+    }
+    if verified { writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true}); return }
+
+    // Reaproveita último código válido; senão, cria um novo e invalida anteriores
+    var code string
+    sel := db.Rebind(`SELECT code FROM admins_verifications 
+        WHERE admin_id = ? AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        ORDER BY created_at DESC LIMIT 1`)
+    if e := sqldb.QueryRow(sel, adminID).Scan(&code); e != nil || strings.TrimSpace(code) == "" {
+        code, _ = generateVerificationCode(contants.VerificationCodeLength)
+        _, _ = sqldb.Exec(db.Rebind(`INSERT INTO admins_verifications (admin_id, code, expires_at) VALUES (?,?,?)`), adminID, code, time.Now().Add(time.Duration(cfg.VerifyCodeTTLHours)*time.Hour))
+        // Invalida anteriores não consumidos
+        _, _ = sqldb.Exec(db.Rebind(`UPDATE admins_verifications SET consumed_at = CURRENT_TIMESTAMP WHERE admin_id = ? AND consumed_at IS NULL AND code <> ?`), adminID, code)
+    }
+
+    // Envia e-mail (pula e-mails de teste)
+    if mailer != nil && !isTestEmail(email) {
+        verifyURL := buildVerifyURL(r, code)
+        tmpl := cfg.AdminCreatedTemplate
+        if strings.TrimSpace(tmpl) == "" { tmpl = cfg.EmailTemplateName }
+        data := map[string]any{
+            "Title":            "Verificação de conta",
+            "Message":          "Clique no botão abaixo ou use o código para verificar sua conta.",
+            "Email":            email,
+            "Username":         username,
+            "VerificationCode": code,
+            "VerifyURL":        verifyURL,
+            // também suporta template genérico
+            "ActionURL":        verifyURL,
+            "ActionText":       "Verificar conta",
+            "ExtraNote":        fmt.Sprintf("Seu código de verificação: %s", code),
+        }
+        ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+        defer cancel()
+        _ = mailer.Send(ctx, emailsvc.Params{To: []string{email}, Subject: contants.EmailSubjectAdminCreated, TemplateName: tmpl, Data: data})
+    }
+    writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true})
 }
 
 func adminUpdateSubscriptionPlanHandler_impl(w http.ResponseWriter, r *http.Request) {

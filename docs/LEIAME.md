@@ -10,6 +10,8 @@ Variáveis de ambiente importantes
 - `EMAIL_*`: configurações SMTP
 - `PUBLIC_BASE_URL`: base pública (frontend) para montar links
 - `ALLOWED_REDIRECT_URIS`: origens autorizadas para redireciono
+- `VERIFY_RESEND_IP_LIMIT` / `VERIFY_RESEND_IP_WINDOW_MINUTES`: rate limit de reenvio por IP (defaults herdam RECOVERY_IP_*)
+- `VERIFY_RESEND_LOGIN_LIMIT` / `VERIFY_RESEND_LOGIN_WINDOW_MINUTES`: rate limit de reenvio por login/e-mail (defaults herdam RECOVERY_EMAIL_*)
 
 ALLOWED_REDIRECT_URIS
 

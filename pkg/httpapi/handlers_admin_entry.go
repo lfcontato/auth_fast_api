@@ -8,10 +8,10 @@ func adminHandleMFAVerify(w http.ResponseWriter, r *http.Request)               
 func adminHandlePasswordRecovery(w http.ResponseWriter, r *http.Request)          { adminAuthPasswordRecoveryHandler(w, r) }
 func adminHandleVerifyCodeURL(w http.ResponseWriter, r *http.Request, code string){ adminAuthVerifyCodeURLHandler(w, r, code) }
 func adminHandleVerify(w http.ResponseWriter, r *http.Request)                    { adminAuthVerifyHandler(w, r) }
+func adminHandleVerificationCodeResend(w http.ResponseWriter, r *http.Request)    { adminAuthVerificationCodeResendHandler(w, r) }
 func adminHandleCreate(w http.ResponseWriter, r *http.Request)                    { adminCreateHandler(w, r) }
 func adminHandleList(w http.ResponseWriter, r *http.Request)                      { adminListHandler(w, r) }
 func adminHandleUpdatePlan(w http.ResponseWriter, r *http.Request)                { adminUpdateSubscriptionPlanHandler(w, r) }
 func adminHandleUpdateRole(w http.ResponseWriter, r *http.Request)                { adminUpdateSystemRoleHandler(w, r) }
 func adminHandleChangeOwnPassword(w http.ResponseWriter, r *http.Request)         { adminChangeOwnPasswordHandler(w, r) }
 func adminHandleCreateAPIToken(w http.ResponseWriter, r *http.Request)            { adminCreateAPITokenHandler(w, r) }
-

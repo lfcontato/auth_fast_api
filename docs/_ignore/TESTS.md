@@ -21,7 +21,7 @@ Como usar
 ## Fluxo de testes (Vercel)
 
 # 1) Criar usuário
-curl -X POST https://auth-fast-api.vercel.app/api/user \
+curl -X POST http://localhost:8080/api/user \
   -H 'Content-Type: application/json' \
   -d '{ "email":"luis.fernando.pereira.procempa@gmail.com", "username":"lfcontato", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
 

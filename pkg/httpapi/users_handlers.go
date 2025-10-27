@@ -370,7 +370,7 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
     _, _ = tx.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), userID, code, time.Now().Add(time.Duration(cfg.VerifyCodeTTLHours)*time.Hour))
     _ = tx.Commit()
     // email
-    if mailer != nil {
+    if mailer != nil && !isTestEmail(req.Email) {
         base := strings.TrimRight(selectRedirectBaseURL(r), "/")
         var verifyURL string
         pathPrefix := ""
@@ -400,12 +400,23 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
 
 // userAuthVerificationCodeHandler: POST /user/auth/verification-code (reenvio)
 func userAuthVerificationCodeHandler(w http.ResponseWriter, r *http.Request) {
+    // Rate limit: por IP e por login
+    ip := clientIP(r)
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:userverifyresend:ip:"+ip, int64(cfg.VerifyResendIPLimit), time.Duration(cfg.VerifyResendIPWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas solicitações. Tente mais tarde."})
+        return
+    }
+
     var req struct{ Login string `json:"login"` }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Login) == "" {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_014", "message": "login ausente"})
         return
     }
     login := strings.ToLower(strings.TrimSpace(req.Login))
+    if ok, _, _ := kv.AllowRate(r.Context(), "rl:userverifyresend:login:"+login, int64(cfg.VerifyResendLoginLimit), time.Duration(cfg.VerifyResendLoginWindowMinutes)*time.Minute); !ok {
+        writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_EMAIL", "message": "Limite de reenvio excedido. Tente mais tarde."})
+        return
+    }
     var (
         userID int64
         email string
@@ -415,8 +426,18 @@ func userAuthVerificationCodeHandler(w http.ResponseWriter, r *http.Request) {
     err := sqldb.QueryRow(db.Rebind(`SELECT id, email, username, is_verified FROM users WHERE username = ? OR email = ? LIMIT 1`), login, login).Scan(&userID, &email, &username, &verified)
     if err != nil { writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true}); return }
     if verified { writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true}); return }
-    code, _ := generateVerificationCode(contants.VerificationCodeLength)
-    _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), userID, code, time.Now().Add(time.Duration(cfg.VerifyCodeTTLHours)*time.Hour))
+    // Reutiliza último código válido, se existir; senão, gera novo e invalida anteriores
+    var code string
+    sel := db.Rebind(`SELECT code FROM users_verifications 
+        WHERE user_id = ? AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        ORDER BY created_at DESC LIMIT 1`)
+    if e := sqldb.QueryRow(sel, userID).Scan(&code); e != nil || strings.TrimSpace(code) == "" {
+        // Gerar novo
+        code, _ = generateVerificationCode(contants.VerificationCodeLength)
+        _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), userID, code, time.Now().Add(time.Duration(cfg.VerifyCodeTTLHours)*time.Hour))
+        // Opcional: invalidar códigos anteriores ainda não consumidos (evita múltiplos válidos)
+        _, _ = sqldb.Exec(db.Rebind(`UPDATE users_verifications SET consumed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND consumed_at IS NULL AND code <> ?`), userID, code)
+    }
     if mailer != nil {
         base := strings.TrimRight(selectRedirectBaseURL(r), "/")
         var verifyURL string

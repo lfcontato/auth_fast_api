@@ -51,8 +51,14 @@ curl -X POST http://localhost:8080/user/auth/password-recovery \
 ```
 curl -X POST http://localhost:8080/user/auth/verification-code \
   -H 'Content-Type: application/json' \
--d '{"login":"usuario"}'
+  -d '{"login":"usuario"}'
 ```
+
+Notas:
+- Reaproveita o último código válido (24h por padrão). Se não houver, gera um novo e invalida anteriores não consumidos.
+- Rate limit:
+  - Por IP: `VERIFY_RESEND_IP_LIMIT`/`VERIFY_RESEND_IP_WINDOW_MINUTES` (default herda RECOVERY_IP_*)
+  - Por login/e-mail: `VERIFY_RESEND_LOGIN_LIMIT`/`VERIFY_RESEND_LOGIN_WINDOW_MINUTES` (default herda RECOVERY_EMAIL_*)
 
 # Criar Usuário (signup)
 ```
@@ -137,6 +143,7 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
   3) Se vazio, usa a URL pública da própria API.
 - Em Vercel, se a chamada for feita para `/api/...`, o link conterá `/api` para garantir funcionamento.
 - Ambiente de teste: ao criar usuário com e‑mail terminando em `@domain.com`, o sistema não enviará e‑mail (apenas grava o código). Use os endpoints de verificação para completar o fluxo.
+ - Em ambiente de teste, o reenvio para e‑mails `@domain.com` também não envia e‑mail; o código fica disponível via banco e pode ser usado pelos endpoints de verificação.
 
 # Notas de campos (Users)
 - `tools_role`: default `user`.

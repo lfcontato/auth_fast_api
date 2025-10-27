@@ -125,6 +125,7 @@ Rotas e cURL
     - Defaults: `system_role` default `guest`; `subscription_plan` default `trial` (root no seed é sempre `lifetime`).
     - Um e‑mail automático é enviado com senha/código/link de verificação.
     - Ambiente de teste: se o e‑mail terminar com `@domain.com`, o envio de e‑mail é suprimido (não enviado).
+    - No reenvio de código, e‑mails `@domain.com` também não recebem e‑mail.
   - Resposta (201):
     ```json
     { "success": true, "admin_id": 2, "username": "novo_admin", "email": "novo@dominio.com", "system_role": "user" }
@@ -322,3 +323,14 @@ Backlog de rotas (a implementar)
 - [ ] CORS e headers de segurança quando integrando com frontends.
 - [ ] Paginação/filtros em listagens administrativas (onde aplicável).
 - [ ] Testes de integração e cobertura de erros.
+- Reenviar código de verificação
+  - POST `/admin/auth/verification-code`
+  - Body: `{ "login": "<username_ou_email>" }`
+  - Regras:
+    - Reaproveita o último código válido (não expirado/consumido). Se não houver, gera um novo e invalida códigos anteriores.
+    - Rate limit:
+      - Por IP: `VERIFY_RESEND_IP_LIMIT` por `VERIFY_RESEND_IP_WINDOW_MINUTES` (defaults herdam RECOVERY_IP_*)
+      - Por login/e-mail: `VERIFY_RESEND_LOGIN_LIMIT` por `VERIFY_RESEND_LOGIN_WINDOW_MINUTES` (defaults herdam RECOVERY_EMAIL_*)
+  - cURL (local):
+    - `curl -sS -X POST http://localhost:8080/admin/auth/verification-code -H 'Content-Type: application/json' -d '{"login":"root"}'`
+  - Observação (Vercel): use o prefixo `/api`.

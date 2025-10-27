@@ -19,10 +19,7 @@ git add .
 git commit -m "$computer_name $current_date"
 git push
 
-while IFS='=' read -r key value; do
-  if [ -n "$key" ]; then
-    vercel env add "$key" production <<< "$value"
-  fi
-done < .env
+# Production usando detecção automática (.env.production ou .env)
+./vercel-env-sync.sh production
 
 vercel --prod
