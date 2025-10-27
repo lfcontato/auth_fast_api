@@ -52,6 +52,75 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
     })
 }
 
+// healthDBConfigHandler expõe (temporariamente) informações sanitizadas da configuração de DB.
+// NUNCA retorna senha ou DSN completo. Útil para diagnosticar ambiente.
+func healthDBConfigHandler(w http.ResponseWriter, r *http.Request) {
+    raw := os.Getenv("DATABASE_URL")
+    if strings.TrimSpace(raw) == "" && cfg != nil {
+        raw = cfg.DatabaseURL
+    }
+    mode := "unknown"
+    if strings.Contains(raw, "://") {
+        mode = "url"
+    } else if strings.Contains(raw, "host=") {
+        mode = "libpq"
+    }
+
+    out := map[string]any{
+        "ok":         false,
+        "inited":     inited,
+        "dsn_mode":   mode,
+        "driver":     func() string { if db.IsPostgres() { return "postgres" }; return "sqlite" }(),
+        "config":     map[string]any{},
+    }
+
+    // Parse e sanitiza
+    cfgMap := map[string]any{}
+    if mode == "url" {
+        if u, err := url.Parse(raw); err == nil {
+            host := u.Host
+            h, p, ok := strings.Cut(host, ":")
+            if ok { cfgMap["port"] = p; cfgMap["host"] = h } else { cfgMap["host"] = host }
+            cfgMap["scheme"] = u.Scheme
+            dbname := strings.TrimPrefix(u.Path, "/")
+            if dbname != "" { cfgMap["dbname"] = dbname }
+            if u.User != nil {
+                if u.User.Username() != "" { cfgMap["user"] = u.User.Username() }
+                _, has := u.User.Password()
+                cfgMap["has_password"] = has
+            }
+            if q := u.Query().Get("sslmode"); q != "" { cfgMap["sslmode"] = q }
+        }
+    } else if mode == "libpq" {
+        // Divide por espaços em pares k=v (simples, não cobre quotes complexos)
+        parts := strings.Fields(raw)
+        m := map[string]string{}
+        for _, part := range parts {
+            if kv := strings.SplitN(part, "=", 2); len(kv) == 2 {
+                k := strings.ToLower(strings.TrimSpace(kv[0]))
+                v := strings.TrimSpace(kv[1])
+                m[k] = v
+            }
+        }
+        if h := strings.TrimSpace(m["host"]); h != "" { cfgMap["host"] = h }
+        if p := strings.TrimSpace(m["port"]); p != "" { cfgMap["port"] = p }
+        if d := strings.TrimSpace(m["dbname"]); d != "" { cfgMap["dbname"] = d }
+        if u := strings.TrimSpace(m["user"]); u != "" { cfgMap["user"] = u }
+        if s := strings.TrimSpace(m["sslmode"]); s != "" { cfgMap["sslmode"] = s }
+        if _, ok := m["password"]; ok { cfgMap["has_password"] = true } else { cfgMap["has_password"] = false }
+    }
+    out["config"] = cfgMap
+
+    // Teste de ping (opcional)
+    if sqldb != nil {
+        if err := sqldb.PingContext(r.Context()); err == nil {
+            out["ok"] = true
+        } else {
+            out["error"] = err.Error()
+        }
+    }
+    writeJSON(w, http.StatusOK, out)
+}
 // healthDBHandler verifica conexão com o banco e expõe detalhes mínimos de debug.
 func healthDBHandler(w http.ResponseWriter, r *http.Request) {
     resp := map[string]any{
