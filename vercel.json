@@ -1,11 +1,15 @@
 {
-    "rewrites": [
-        { "source": "/api", "destination": "/api/index.go" },
-        { "source": "/api/(.*)", "destination": "/api/index.go" },
-        { "source": "/login", "destination": "/api/index.go" },
-        { "source": "/healthz", "destination": "/api/index.go" },
-        { "source": "/admin", "destination": "/api/index.go" },
-        { "source": "/admin/(.*)", "destination": "/api/index.go" }
-    ]
-  
+  "rewrites": [
+    { "source": "/api", "destination": "/api/index.go" },
+    { "source": "/api/(.*)", "destination": "/api/index.go" },
+
+    { "source": "/login", "destination": "/api/index.go" },
+    { "source": "/healthz", "destination": "/api/index.go" },
+
+    { "source": "/admin", "destination": "/api/index.go" },
+    { "source": "/admin/(.*)", "destination": "/api/index.go" },
+
+    { "source": "/user", "destination": "/api/index.go" },
+    { "source": "/user/(.*)", "destination": "/api/index.go" }
+  ]
 }

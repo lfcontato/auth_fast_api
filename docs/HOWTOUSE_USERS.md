@@ -12,7 +12,7 @@ Manutenção: revise estes exemplos após qualquer mudança de rota, parâmetros
 ```
 curl -X POST http://localhost:8080/user/auth/token \
   -H 'Content-Type: application/json' \
-  -d '{"username":"usuario","password":"minhasenha"}'
+  -d '{"username":"usuario","password":"MinhaSenha123!"}'
 ```
 
 Resposta (200):
@@ -131,3 +131,5 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
 - `tools_role`: default `guest`; opções: `guest|user|admin|root`.
 - `subscription_plan`: default `trial`; opções: `trial|monthly|semiannual|annual|lifetime`.
 - `password`: em fluxos de cadastro de usuário (quando presentes), é opcional; o sistema gera automaticamente quando omitida.
+
+

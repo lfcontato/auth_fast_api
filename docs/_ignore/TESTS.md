@@ -17,3 +17,7 @@ Como usar
 2) Abra o arquivo desejado (`tests/auth.http` ou `tests/health.http`) no VS Code
 3) Clique em "Send Request" acima de cada requisição
 4) Para o fluxo de auth: rode primeiro `@login`, depois `@refresh` (ele referencia o `refresh_token` do login automaticamente).
+
+
+curl -X POST http://localhost:8080/user/auth/token -H 'Content-Type: application/json' -d '{"username":"usuario","password":"MinhaSenha123!"}'
+curl -X POST https://auth-fast-api.vercel.app/user/auth/token -H 'Content-Type: application/json' -d '{"username":"usuario","password":"MinhaSenha123!"}'
