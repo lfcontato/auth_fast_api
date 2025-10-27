@@ -1600,6 +1600,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
         healthDBHandler(w, r)
         return
 
+    case path == "/healthz/db-config":
+        healthDBConfigHandler(w, r)
+        return
+
     case path == "/openapi.json" && r.Method == http.MethodGet:
         // expõe o arquivo openapi.json da raiz do projeto
         w.Header().Set("Content-Type", "application/json; charset=utf-8")
