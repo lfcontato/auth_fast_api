@@ -14,6 +14,7 @@ import (
     "fmt"
     "log"
     "math/big"
+    "net/url"
     "net/http"
     "os"
     "strconv"
@@ -2364,17 +2365,14 @@ func generateStrongPassword(n int) string {
 
 // buildVerifyURL monta a URL pública para verificação, se base estiver configurada.
 func buildVerifyURL(r *http.Request, code string) string {
-	if strings.TrimSpace(code) == "" {
-		return ""
-	}
-	base := strings.TrimRight(cfg.PublicBaseURL, "/")
-	if base == "" {
-		base = strings.TrimRight(requestBaseURL(r), "/")
-	}
-	if base == "" {
-		return ""
-	}
-	return base + "/admin/code-verified/" + code
+    if strings.TrimSpace(code) == "" {
+        return ""
+    }
+    base := strings.TrimRight(selectRedirectBaseURL(r), "/")
+    if base == "" {
+        return ""
+    }
+    return base + "/admin/code-verified/" + code
 }
 
 // requestBaseURL tenta deduzir a URL base (scheme+host) da requisição.
@@ -2397,6 +2395,40 @@ func requestBaseURL(r *http.Request) string {
 	return scheme + "://" + host
 }
 
+// selectRedirectBaseURL escolhe a base de URL para links de verificação/redirecionamento.
+// Regras:
+// - Se ALLOWED_REDIRECT_URIS estiver definido, usa Origin/Referer apenas se pertencer a essa lista.
+// - Caso contrário (ou se não houver correspondência), usa PUBLIC_BASE_URL; se vazio, usa a URL da própria API.
+func selectRedirectBaseURL(r *http.Request) string {
+    // 1) Tenta origem da requisição se estiver autorizada
+    allowedCSV := strings.TrimSpace(cfg.AllowedRedirectURIs)
+    if allowedCSV != "" && r != nil {
+        allowed := make(map[string]struct{})
+        for _, t := range strings.Split(allowedCSV, ",") {
+            o := strings.TrimRight(strings.TrimSpace(t), "/")
+            if o != "" { allowed[o] = struct{}{} }
+        }
+        origin := strings.TrimRight(strings.TrimSpace(r.Header.Get("Origin")), "/")
+        if origin == "" {
+            if ref := strings.TrimSpace(r.Header.Get("Referer")); ref != "" {
+                if u, err := url.Parse(ref); err == nil && u.Scheme != "" && u.Host != "" {
+                    origin = u.Scheme + "://" + u.Host
+                }
+            }
+        }
+        if origin != "" {
+            if _, ok := allowed[origin]; ok {
+                return origin
+            }
+        }
+    }
+    // 2) Fallback: PUBLIC_BASE_URL
+    base := strings.TrimRight(cfg.PublicBaseURL, "/")
+    if base != "" { return base }
+    // 3) Fallback: URL da própria API
+    return strings.TrimRight(requestBaseURL(r), "/")
+}
+
 // clientIP extrai IP do X-Forwarded-For ou RemoteAddr
 func clientIP(r *http.Request) string {
     if r == nil { return "" }
@@ -2407,6 +2439,12 @@ func clientIP(r *http.Request) string {
     host := r.RemoteAddr
     if i := strings.LastIndex(host, ":"); i > 0 { host = host[:i] }
     return host
+}
+
+// isTestEmail retorna true para e-mails com sufixo "@domain.com" (ambiente de teste).
+func isTestEmail(email string) bool {
+    e := strings.ToLower(strings.TrimSpace(email))
+    return strings.HasSuffix(e, "@domain.com")
 }
 
 // authenticateUser valida Authorization: Bearer (JWT) para usuários e retorna userID

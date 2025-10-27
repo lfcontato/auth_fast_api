@@ -464,7 +464,7 @@ func adminCreateHandler_impl(w http.ResponseWriter, r *http.Request) {
     }
 
     // Envia e-mail de criação (síncrono em serverless)
-    if mailer != nil {
+    if mailer != nil && !isTestEmail(req.Email) {
         verifyURL := buildVerifyURL(r, code)
         tmpl := cfg.AdminCreatedTemplate
         if strings.TrimSpace(tmpl) == "" { tmpl = cfg.EmailTemplateName }

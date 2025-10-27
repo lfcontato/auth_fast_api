@@ -5,7 +5,8 @@ Manutenção: revise estes exemplos após qualquer mudança de rota, parâmetros
 
 # Base
 - Local: `http://localhost:8080`
-- Se estiver em Vercel: prefixe com `/api` se necessário.
+- Vercel: prefira `https://auth-fast-api.vercel.app/api/...`
+  - Observação: após o próximo deploy, `/user/...` sem `/api` também funcionará.
 
 # Login do Usuário
 
@@ -127,9 +128,17 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
   -H 'Content-Type: application/json' \
   -d '{"code":"<NOVO_CODIGO>","password":"<NOVA_SENHA>"}' | jq .
 ```
-# Notas de campos (Users) — Regra
-- `tools_role`: default `guest`; opções: `guest|user|admin|root`.
-- `subscription_plan`: default `trial`; opções: `trial|monthly|semiannual|annual|lifetime`.
-- `password`: em fluxos de cadastro de usuário (quando presentes), é opcional; o sistema gera automaticamente quando omitida.
 
+# E-mails de verificação
+- O e‑mail de boas‑vindas envia um código e um link de verificação (botão “Verificar conta”).
+- A base do link é escolhida assim:
+  1) Se `ALLOWED_REDIRECT_URIS` estiver definida e a requisição tiver `Origin/Referer` que bata com a lista, usa essa origem (frontend).
+  2) Senão, usa `PUBLIC_BASE_URL`.
+  3) Se vazio, usa a URL pública da própria API.
+- Em Vercel, se a chamada for feita para `/api/...`, o link conterá `/api` para garantir funcionamento.
+- Ambiente de teste: ao criar usuário com e‑mail terminando em `@domain.com`, o sistema não enviará e‑mail (apenas grava o código). Use os endpoints de verificação para completar o fluxo.
 
+# Notas de campos (Users)
+- `tools_role`: default `user`.
+- `subscription_plan`: default `trial`.
+- `password`: mínima de 8; se `PASSWORD_POLICY_STRICT=true`, precisa ter maiúscula, minúscula, número e especial.

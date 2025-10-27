@@ -69,6 +69,10 @@ type Config struct {
 
     // URL pública base (frontend) para compor links em e-mails
     PublicBaseURL string
+
+    // URIs de redirecionamento autorizados (origens permitidas), separados por vírgula.
+    // Ex.: https://app.seusite.com, https://localhost:3000
+    AllowedRedirectURIs string
 }
 
 // getenv retorna o valor de uma variável de ambiente, ou o default se não definido.
@@ -151,5 +155,6 @@ func Load() *Config {
         ServiceName:     getenv("OTEL_SERVICE_NAME", "auth_fast_api"),
         Version:         getenv("SERVICE_VERSION", "0.1.0"),
         PublicBaseURL:   getenv("PUBLIC_BASE_URL", ""),
+        AllowedRedirectURIs: getenv("ALLOWED_REDIRECT_URIS", ""),
     }
 }

@@ -25,6 +25,10 @@ Notas de campos e defaults (Regra)
 - `password`: opcional; se omitida, o sistema gera.
 - `system_role`: opcional; default `guest`; enum `guest|user|admin|root`.
 - `subscription_plan`: opcional; default `trial`; enum `trial|monthly|semiannual|annual|lifetime`.
+  
+Ambiente de teste
+
+- Se o e‑mail informado terminar em `@domain.com`, o envio de e‑mail de criação é suprimido (não enviado), útil para testes.
 
 # Alterar Papel
 ```bash

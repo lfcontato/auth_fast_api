@@ -124,6 +124,7 @@ Rotas e cURL
     - Se `password` for omitida, o sistema gera uma senha de 8 dígitos.
     - Defaults: `system_role` default `guest`; `subscription_plan` default `trial` (root no seed é sempre `lifetime`).
     - Um e‑mail automático é enviado com senha/código/link de verificação.
+    - Ambiente de teste: se o e‑mail terminar com `@domain.com`, o envio de e‑mail é suprimido (não enviado).
   - Resposta (201):
     ```json
     { "success": true, "admin_id": 2, "username": "novo_admin", "email": "novo@dominio.com", "system_role": "user" }

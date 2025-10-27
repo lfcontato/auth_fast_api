@@ -96,12 +96,9 @@ func userCreateHandler(w http.ResponseWriter, r *http.Request) {
         ttl := time.Duration(cfg.VerifyCodeTTLHours) * time.Hour
         _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), newID, code, time.Now().Add(ttl))
         // E‑mail de boas‑vindas/verificação (melhor esforço)
-        if mailer != nil {
+        if mailer != nil && !isTestEmail(req.Email) {
             // Monta link de verificação que aponta para o endpoint de verificação por link
-            base := strings.TrimRight(cfg.PublicBaseURL, "/")
-            if base == "" {
-                base = strings.TrimRight(requestBaseURL(r), "/")
-            }
+            base := strings.TrimRight(selectRedirectBaseURL(r), "/")
             var verifyURL string
             pathPrefix := ""
             if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
@@ -374,8 +371,7 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
     _ = tx.Commit()
     // email
     if mailer != nil {
-        base := strings.TrimRight(cfg.PublicBaseURL, "/")
-        if base == "" { base = strings.TrimRight(requestBaseURL(r), "/") }
+        base := strings.TrimRight(selectRedirectBaseURL(r), "/")
         var verifyURL string
         pathPrefix := ""
         if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
@@ -422,8 +418,7 @@ func userAuthVerificationCodeHandler(w http.ResponseWriter, r *http.Request) {
     code, _ := generateVerificationCode(contants.VerificationCodeLength)
     _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), userID, code, time.Now().Add(time.Duration(cfg.VerifyCodeTTLHours)*time.Hour))
     if mailer != nil {
-        base := strings.TrimRight(cfg.PublicBaseURL, "/")
-        if base == "" { base = strings.TrimRight(requestBaseURL(r), "/") }
+        base := strings.TrimRight(selectRedirectBaseURL(r), "/")
         var verifyURL string
         pathPrefix := ""
         if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
