@@ -1,4 +1,4 @@
-Arquivo: DATABASE.md
+Arquivo: docs/DATABASE.md
 Resumo: Esquema de dados e regras de persistência usadas pela API (SQLite/Postgres), incluindo colunas, restrições, planos de assinatura e como os tokens respeitam expiração de conta.
 
 **Visão Geral**
@@ -78,4 +78,3 @@ Resumo: Esquema de dados e regras de persistência usadas pela API (SQLite/Postg
 - Modelos: `internal/domain/models.go`
 - Regras de login/refresh e clamp de expiração: `internal/services/auth/service.go`
 - Handlers HTTP (criar admin, verificação, recuperação, patch de plano/papel): `pkg/httpapi/httpapi.go`
-

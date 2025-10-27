@@ -2,7 +2,7 @@
 
 Este é o **prompt de sistema final** para a construção da API de autenticação e autorização (`Auth_Fast_API`). O objetivo é estruturar o modelo de dados, as regras de negócio e a lógica de autorização, sem gerar código.
 
-Voce deve manter um arquivo de contexto, chamado CONTEXTO.md que vai adicionar sempre o prompt anterior, mantendo com todas as alterações feitas no programa e as novas funcionalidades.
+Voce deve manter um arquivo de contexto, chamado docs/CONTEXTO.md que vai adicionar sempre o prompt anterior, mantendo com todas as alterações feitas no programa e as novas funcionalidades.
 
 no inicio de cada arquivo deve conter o caminho e o resumo de que faz o arquivo
 antes de cada função deve descrever o que ela faz.

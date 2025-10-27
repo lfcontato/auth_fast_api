@@ -4,9 +4,9 @@ Resumo: Guia completo e descritivo de consumo da API (autenticação, endpoints,
 # Visão Geral
 
 Navegação rápida:
-- Admins: docs/ADMINS.md
-- Usuários/UsersSpaces: docs/USERS.md · Exemplos: HOWTOUSE_USERS.md
-- Tools: docs/TOOLS.md · Exemplos: HOWTOUSE_TOOLS.md
+- Admins: ADMINS.md
+- Usuários/UsersSpaces: USERS.md · Exemplos: HOWTOUSE_USERS.md
+- Tools: TOOLS.md · Exemplos: HOWTOUSE_TOOLS.md
 
 Esta API implementa autenticação via JWT com fluxo de Access Token (curta duração) e Refresh Token (longa duração). Endpoints atuais permitem:
 - Verificação de saúde do serviço.

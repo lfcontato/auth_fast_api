@@ -1,4 +1,4 @@
-Arquivo: tests/README.md
+Arquivo: docs/TESTS.md
 Resumo: Como usar os arquivos .http (VS Code REST Client) para testar a API local.
 
 Pré-requisitos
@@ -17,4 +17,3 @@ Como usar
 2) Abra o arquivo desejado (`tests/auth.http` ou `tests/health.http`) no VS Code
 3) Clique em "Send Request" acima de cada requisição
 4) Para o fluxo de auth: rode primeiro `@login`, depois `@refresh` (ele referencia o `refresh_token` do login automaticamente).
-

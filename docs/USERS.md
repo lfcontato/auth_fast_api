@@ -3,7 +3,7 @@ Resumo: Rotas e modelo de usuários (login/refresh/verify/recovery) e relação 
 
 Manutenção: mantenha este documento atualizado sempre que alterar rotas, payloads, regras de autenticação/ACL. Este arquivo é o local canônico do checklist e “próximos passos” do recurso de Usuários. Os HOWTOUSE não devem conter checklists — apenas exemplos de consumo.
 
-Navegação: [Admins](ADMINS.md) · [Tools](TOOLS.md) · [Como usar (Users)](../HOWTOUSE_USERS.md) · [Como usar (Tools)](../HOWTOUSE_TOOLS.md)
+Navegação: [Admins](ADMINS.md) · [Tools](TOOLS.md) · [Como usar (Users)](HOWTOUSE_USERS.md) · [Como usar (Tools)](HOWTOUSE_TOOLS.md)
 
 # Modelo de Usuário
 
@@ -36,6 +36,7 @@ Navegação: [Admins](ADMINS.md) · [Tools](TOOLS.md) · [Como usar (Users)](../
 - GET `/user/auth/verify-link?login=&code=` – confirma via link público (por `username` ou `email`).
 - POST `/user/auth/password-recovery` – redefine senha e envia código por e‑mail.
 - POST `/user/auth/verification-code` – reenvia código de verificação (por `login`).
+- POST `/user` – cria usuário: `{ email, username, password, confirm_password }`. Senhas devem coincidir; aplica política de senha. Cria conta `is_verified=false` e envia código de verificação por e‑mail.
 
 # UsersSpaces
 

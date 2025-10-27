@@ -1,4 +1,4 @@
-Arquivo: CONTEXTO.md
+Arquivo: docs/CONTEXTO.md
 Resumo: Histórico de prompts e alterações aplicadas ao projeto. Mantém o contexto de decisões e funcionalidades adicionadas.
 
 ---
@@ -6,6 +6,23 @@ Data: 2025-10-18
 
 Prompt do usuário:
 "criar um sistema"
+
+---
+
+Data: 2025-10-26
+
+Solicitação: "ajuste a documentação" e padronização conforme PROMPT_DESENVOLVIMENTO_CONTINUO.md
+
+Alterações aplicadas:
+- Reorganização dos arquivos .md: todos em `docs/` exceto `README.md` na raiz.
+- Atualização de links relativos entre documentos (HOWTOUSE, USERS, TOOLS, ADMINS, TESTS, MCP_GUIDE).
+- Movido `tests/README.md` para `docs/TESTS.md`.
+- Atualizado `docs/PROMPT_DESENVOLVIMENTO_CONTINUO.md` com diretriz de documentação por domínio e localização dos arquivos (`README.md` na raiz; demais em `docs/`).
+- Ajustado `README.md` para referenciar `docs/CONTEXTO.md` e `docs/MCP_GUIDE.md`.
+
+Observações:
+- docs/_ignore mantido para materiais auxiliares não essenciais.
+- Sem mudanças de endpoints; apenas documentação e navegação.
 
 Diretrizes relevantes (README):
 - Manter arquivo de contexto (CONTEXTO.md) com prompts anteriores, alterações e novas funcionalidades.

@@ -15,6 +15,7 @@
 - Sempre que criar/alterar algo, **atualize**:
   1. `README.md` → com *Checklist* (feito, pendente, sugestões).
   2. `docs/HOWTOUSE_{nome_da_funcionalidade}.md` → guia de uso com exemplos (cURL/HTTP), requisitos e observações.
+- **Documentação por domínio, sem acoplamento cruzado**: mantenha a documentação segmentada por domínio. O `README.md` é o único arquivo na raiz; todos os demais `.md` residem em `docs/`. Para novas features, crie sempre `docs/HOWTOUSE_{nome_da_funcionalidade}.md` e atualize o `README.md`.
 - **Nunca** misture DTOs/entidades entre domínios sem um *mapper* explícito.
 - **Tratamento de erros padronizados** (códigos, mensagens i18n-friendly) e **logs estruturados** por domínio.
 

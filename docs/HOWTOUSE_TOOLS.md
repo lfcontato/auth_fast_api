@@ -1,7 +1,7 @@
 Arquivo: HOWTOUSE_TOOLS.md
 Resumo: Como trabalhar com UsersSpaces e bases das tools.
 
-Manutenção: atualize estes exemplos sempre que houver mudanças nas rotas, parâmetros, respostas ou permissões. Garanta consistência com docs/TOOLS.md e docs/USERS.md. Não inclua checklists ou “próximos passos” aqui — o local canônico é docs/TOOLS.md (para tools) e docs/USERS.md (para usuários).
+Manutenção: atualize estes exemplos sempre que houver mudanças nas rotas, parâmetros, respostas ou permissões. Garanta consistência com TOOLS.md e USERS.md. Não inclua checklists ou “próximos passos” aqui — o local canônico é TOOLS.md (para tools) e USERS.md (para usuários).
 
 # UsersSpaces
 
@@ -41,7 +41,7 @@ curl -s http://localhost:8080/user/spaces \
   - `AUTOMATA_DATABASE_URL=sqlite:///automata_test.db`
 
 # Referência de roadmap
-Consulte docs/TOOLS.md para o checklist e próximos passos das tools.
+Consulte TOOLS.md para o checklist e próximos passos das tools.
 
 # Membership (exemplos)
 
@@ -147,7 +147,7 @@ curl -X POST "$BASE/tasks" \
   -d '{"board_id":1, "title":"Minha Tarefa", "description":"Detalhes"}'
 ```
 # Checklist e Próximos Passos
-Consulte docs/TOOLS.md para o checklist e próximos passos das tools.
+Consulte TOOLS.md para o checklist e próximos passos das tools.
 Validação de ACL (exemplos de falha)
 - Tentar criar board com usuário sem permissão (ex.: `guest` no espaço): deve retornar 403
 ```

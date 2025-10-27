@@ -1,7 +1,7 @@
 Arquivo: HOWTOUSE_USERS.md
 Resumo: Exemplos de consumo das rotas de Usuários e UsersSpaces.
 
-Manutenção: revise estes exemplos após qualquer mudança de rota, parâmetros, códigos de resposta ou regras de autenticação/ACL. Garanta consistência com docs/USERS.md e docs/TOOLS.md. Não inclua checklists ou “próximos passos” aqui — o local canônico para isso é docs/USERS.md (para usuários) e docs/TOOLS.md (para tools).
+Manutenção: revise estes exemplos após qualquer mudança de rota, parâmetros, códigos de resposta ou regras de autenticação/ACL. Garanta consistência com USERS.md e TOOLS.md. Não inclua checklists ou “próximos passos” aqui — o local canônico para isso é USERS.md (para usuários) e TOOLS.md (para tools).
 
 # Base
 - Local: `http://localhost:8080`
@@ -50,7 +50,19 @@ curl -X POST http://localhost:8080/user/auth/password-recovery \
 ```
 curl -X POST http://localhost:8080/user/auth/verification-code \
   -H 'Content-Type: application/json' \
-  -d '{"login":"usuario"}'
+-d '{"login":"usuario"}'
+```
+
+# Criar Usuário (signup)
+```
+curl -X POST http://localhost:8080/user \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email":"user@example.com",
+    "username":"usuario",
+    "password":"MinhaSenha123!",
+    "confirm_password":"MinhaSenha123!"
+  }'
 ```
 
 # Criar UsersSpace (requer tools_role=admin)

@@ -21,6 +21,96 @@ import (
     "golang.org/x/crypto/bcrypt"
 )
 
+// userCreateHandler: POST /user
+// Cria um novo usuário a partir de username, email, password e confirm_password.
+// Regras:
+//  - Senhas devem coincidir e obedecer à política (validatePassword).
+//  - Username e email são normalizados (username trim; email lowercase).
+//  - Define defaults: tools_role='user', subscription_plan='trial' com expires_at conforme computeExpires.
+//  - Marca is_verified=false e gera código em users_verifications (TTL cfg.VerifyCodeTTLHours), enviando e‑mail se mailer estiver configurado.
+func userCreateHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"success": false, "code": "HTTP_405", "message": "Método não permitido"})
+        return
+    }
+    var req struct{
+        Email           string `json:"email"`
+        Username        string `json:"username"`
+        Password        string `json:"password"`
+        ConfirmPassword string `json:"confirm_password"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_JSON", "message": "JSON inválido"})
+        return
+    }
+    req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+    req.Username = strings.TrimSpace(strings.ToLower(req.Username))
+    req.Password = strings.TrimSpace(req.Password)
+    req.ConfirmPassword = strings.TrimSpace(req.ConfirmPassword)
+    if req.Email == "" || req.Username == "" || req.Password == "" || req.ConfirmPassword == "" {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_REQUIRED", "message": "Campos obrigatórios ausentes"})
+        return
+    }
+    if req.Password != req.ConfirmPassword {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_PW_MISMATCH", "message": "Senhas não conferem"})
+        return
+    }
+    if err := validatePassword(req.Password); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_PW_POLICY", "message": err.Error()})
+        return
+    }
+    hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+    if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_HASH", "message": "Falha ao processar senha"}); return }
+
+    // Defaults de perfil
+    toolsRole := "user"
+    plan := "trial"
+    var expires any = nil
+    if plan != "lifetime" {
+        e := computeExpires(plan, time.Now())
+        expires = e
+    }
+
+    // Inserir usuário
+    var newID int64
+    if db.IsPostgres() {
+        q := db.Rebind(`INSERT INTO users (email, username, password_hash, tools_role, subscription_plan, expires_at, is_verified) VALUES (?,?,?,?,?,?,?) RETURNING id`)
+        if err := sqldb.QueryRow(q, req.Email, req.Username, string(hash), toolsRole, plan, expires, false).Scan(&newID); err != nil {
+            writeJSON(w, http.StatusConflict, map[string]any{"success": false, "code": "AUTH_409_DUP", "message": "Email ou username já existente"})
+            return
+        }
+    } else {
+        res, err := sqldb.Exec(db.Rebind(`INSERT INTO users (email, username, password_hash, tools_role, subscription_plan, expires_at, is_verified) VALUES (?,?,?,?,?,?,?)`), req.Email, req.Username, string(hash), toolsRole, plan, expires, false)
+        if err != nil {
+            writeJSON(w, http.StatusConflict, map[string]any{"success": false, "code": "AUTH_409_DUP", "message": "Email ou username já existente"})
+            return
+        }
+        newID, _ = res.LastInsertId()
+    }
+
+    // Gera e persiste código de verificação
+    code, cerr := generateVerificationCode(contants.VerificationCodeLength)
+    if cerr == nil {
+        ttl := time.Duration(cfg.VerifyCodeTTLHours) * time.Hour
+        _, _ = sqldb.Exec(db.Rebind(`INSERT INTO users_verifications (user_id, code, expires_at) VALUES (?,?,?)`), newID, code, time.Now().Add(ttl))
+        // E‑mail de boas‑vindas/verificação (melhor esforço)
+        if mailer != nil {
+            data := map[string]any{
+                "Title":             "Bem-vindo(a)",
+                "Message":           "Use o código para verificar sua conta.",
+                "Email":             req.Email,
+                "Username":          req.Username,
+                "VerificationCode":  code,
+            }
+            ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+            defer cancel()
+            _ = mailer.Send(ctx, emailsvc.Params{To: []string{req.Email}, Subject: contants.EmailSubjectUserCreated, TemplateName: cfg.EmailTemplateName, Data: data})
+        }
+    }
+
+    writeJSON(w, http.StatusCreated, map[string]any{"success": true, "user_id": newID, "username": req.Username, "email": req.Email})
+}
+
 // userAuthTokenHandler: POST /user/auth/token
 // Autentica usuário por username/password e emite par de tokens.
 func userAuthTokenHandler(w http.ResponseWriter, r *http.Request) {

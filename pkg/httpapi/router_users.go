@@ -9,6 +9,8 @@ import (
 func handleUserAuthRoutes(w http.ResponseWriter, r *http.Request) bool {
     path := r.URL.Path
     switch {
+    case path == "/user" && r.Method == http.MethodPost:
+        userHandleCreate(w, r); return true
     case path == "/user/auth/token" && r.Method == http.MethodPost:
         userHandleAuthToken(w, r); return true
     case path == "/user/auth/token/refresh" && r.Method == http.MethodPost:

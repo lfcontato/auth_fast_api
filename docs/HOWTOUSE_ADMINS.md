@@ -1,7 +1,7 @@
 Arquivo: HOWTOUSE_ADMINS.md
 Resumo: Exemplos de uso das rotas de administradores, com observações sobre defaults e enumerações.
 
-Manutenção: mantenha alinhado com docs/ADMINS.md e openapi.json. Não incluir checklists aqui.
+Manutenção: mantenha alinhado com ADMINS.md e openapi.json. Não incluir checklists aqui.
 
 # Base
 - Local: `http://localhost:8080`

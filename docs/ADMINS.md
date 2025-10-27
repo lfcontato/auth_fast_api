@@ -3,7 +3,7 @@ Resumo: Rotas de administradores (auth, MFA, refresh, verificação, recuperaç�
 
 Manutenção: mantenha este documento sincronizado com as rotas. Checklists e roadmap ficam nos arquivos canônicos de cada domínio: docs/USERS.md e docs/TOOLS.md.
 
-Navegação: [Usuários](USERS.md) · [Tools](TOOLS.md) · [Como usar (Users)](../HOWTOUSE_USERS.md) · [Como usar (Tools)](../HOWTOUSE_TOOLS.md)
+Navegação: [Usuários](USERS.md) · [Tools](TOOLS.md) · [Como usar (Users)](HOWTOUSE_USERS.md) · [Como usar (Tools)](HOWTOUSE_TOOLS.md)
 
 # Guia de Administradores (Rotas + cURL)
 

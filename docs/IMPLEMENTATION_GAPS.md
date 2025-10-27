@@ -1,4 +1,4 @@
-Arquivo: IMPLEMENTATION_GAPS.md
+Arquivo: docs/IMPLEMENTATION_GAPS.md
 Resumo: Itens pendentes, riscos e sugestões de melhoria com base no código atual. Não altera comportamento — serve como guia de follow‑ups.
 
 **Resumo Executivo**

@@ -3,7 +3,7 @@ Resumo: Conceito de Tools, UsersSpaces e bancos separados. Checklist do que foi 
 
 Manutenção: mantenha este documento alinhado com o código sempre que alterar rotas, entidades, regras de ACL ou roadmap. Este arquivo é o local canônico do checklist e “próximos passos” das tools. Os HOWTOUSE não devem conter checklists — apenas exemplos de consumo.
 
-Navegação: [Admins](ADMINS.md) · [Usuários](USERS.md) · [Como usar (Users)](../HOWTOUSE_USERS.md) · [Como usar (Tools)](../HOWTOUSE_TOOLS.md)
+Navegação: [Admins](ADMINS.md) · [Usuários](USERS.md) · [Como usar (Users)](HOWTOUSE_USERS.md) · [Como usar (Tools)](HOWTOUSE_TOOLS.md)
 
 # Visão Geral
 
