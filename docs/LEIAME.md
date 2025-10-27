@@ -12,6 +12,7 @@ Variáveis de ambiente importantes
 - `ALLOWED_REDIRECT_URIS`: origens autorizadas para redireciono
 - `VERIFY_RESEND_IP_LIMIT` / `VERIFY_RESEND_IP_WINDOW_MINUTES`: rate limit de reenvio por IP (defaults herdam RECOVERY_IP_*)
 - `VERIFY_RESEND_LOGIN_LIMIT` / `VERIFY_RESEND_LOGIN_WINDOW_MINUTES`: rate limit de reenvio por login/e-mail (defaults herdam RECOVERY_EMAIL_*)
+- `EXPOSE_DB_CONFIG`: quando `true`, expõe `/api/healthz/db-config` com informações sanitizadas do DB (sem senha). Padrão: `false`. Use apenas temporariamente para diagnóstico.
 
 ALLOWED_REDIRECT_URIS
 

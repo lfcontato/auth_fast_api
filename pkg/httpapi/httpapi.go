@@ -55,6 +55,16 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 // healthDBConfigHandler expõe (temporariamente) informações sanitizadas da configuração de DB.
 // NUNCA retorna senha ou DSN completo. Útil para diagnosticar ambiente.
 func healthDBConfigHandler(w http.ResponseWriter, r *http.Request) {
+    if cfg == nil || !cfg.ExposeDBConfig {
+        writeJSON(w, http.StatusNotFound, map[string]any{
+            "success":    false,
+            "code":       "HTTP_404",
+            "message":    "Rota não encontrada",
+            "locale_key": "error.not_found",
+            "path":       r.URL.Path,
+        })
+        return
+    }
     raw := os.Getenv("DATABASE_URL")
     if strings.TrimSpace(raw) == "" && cfg != nil {
         raw = cfg.DatabaseURL

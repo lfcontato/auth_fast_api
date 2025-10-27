@@ -80,6 +80,10 @@ type Config struct {
     VerifyResendIPWindowMinutes    int
     VerifyResendLoginLimit         int
     VerifyResendLoginWindowMinutes int
+
+    // Expor rota de debug de configuração do DB (/healthz/db-config)
+    // Use apenas temporariamente em ambientes controlados.
+    ExposeDBConfig bool
 }
 
 // getenv retorna o valor de uma variável de ambiente, ou o default se não definido.
@@ -169,5 +173,7 @@ func Load() *Config {
         VerifyResendIPWindowMinutes:    getenvInt("VERIFY_RESEND_IP_WINDOW_MINUTES", getenvInt("RECOVERY_IP_WINDOW_MINUTES", 60)),
         VerifyResendLoginLimit:         getenvInt("VERIFY_RESEND_LOGIN_LIMIT", getenvInt("RECOVERY_EMAIL_LIMIT", 3)),
         VerifyResendLoginWindowMinutes: getenvInt("VERIFY_RESEND_LOGIN_WINDOW_MINUTES", getenvInt("RECOVERY_EMAIL_WINDOW_MINUTES", 15)),
+
+        ExposeDBConfig: getenvBool("EXPOSE_DB_CONFIG", false),
     }
 }

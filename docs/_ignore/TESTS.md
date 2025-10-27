@@ -20,6 +20,8 @@ Como usar
 
 ## Fluxo de testes (Vercel)
 
+curl -sS https://auth-fast-api.vercel.app/api/healthz/db-config | jq .
+
 # 1) Criar usuário
 curl -X POST http://localhost:8080/api/user \
   -H 'Content-Type: application/json' \
