@@ -45,11 +45,31 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // healthHandler responde OK para verificação de saúde do serviço.
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":      true,
-		"service": "auth_fast_api",
-		"status":  "healthy",
-	})
+    writeJSON(w, http.StatusOK, map[string]any{
+        "ok":      true,
+        "service": "auth_fast_api",
+        "status":  "healthy",
+    })
+}
+
+// healthDBHandler verifica conexão com o banco e expõe detalhes mínimos de debug.
+func healthDBHandler(w http.ResponseWriter, r *http.Request) {
+    resp := map[string]any{
+        "ok":       false,
+        "inited":   inited,
+        "dsn_mode": dsnMode,
+    }
+    if sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, resp)
+        return
+    }
+    if err := sqldb.PingContext(r.Context()); err != nil {
+        resp["error"] = err.Error()
+        writeJSON(w, http.StatusServiceUnavailable, resp)
+        return
+    }
+    resp["ok"] = true
+    writeJSON(w, http.StatusOK, resp)
 }
 
 // rootHandler responde um resumo básico do serviço.
@@ -1507,6 +1527,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		healthHandler(w, r)
 		return
 
+    case path == "/healthz/db":
+        healthDBHandler(w, r)
+        return
+
     case path == "/openapi.json" && r.Method == http.MethodGet:
         // expõe o arquivo openapi.json da raiz do projeto
         w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -2011,6 +2035,7 @@ var (
     mailer  *emailsvc.Service
     facdb   *sql.DB
     autdb   *sql.DB
+    dsnMode string
 )
 
 // init prepara dependências (DB, migrações, serviço) na primeira invocação.
@@ -2018,8 +2043,10 @@ func init() {
 	if inited {
 		return
 	}
-	// Em desenvolvimento, preferimos que o .env local sobrescreva variáveis já definidas
-	_ = godotenv.Overload()
+    // Em desenvolvimento local, permitimos .env sobrescrever variáveis
+    if os.Getenv("VERCEL") == "" && os.Getenv("AWS_LAMBDA_FUNCTION_NAME") == "" {
+        _ = godotenv.Overload()
+    }
 	cfg = config.Load()
     dbURL := os.Getenv("DATABASE_URL")
     if dbURL == "" { dbURL = cfg.DatabaseURL }
@@ -2032,8 +2059,17 @@ func init() {
         }
     }
     if os.Getenv("VERCEL") != "" {
-        // Log leve para depuração (não imprime DSN completo)
-        logInfo("serverless init: selecting database target=custom")
+        // Log leve para depuração (não imprime segredos)
+        if strings.Contains(dbURL, "://") {
+            dsnMode = "url"
+        } else if strings.Contains(dbURL, "host=") {
+            dsnMode = "libpq"
+        } else {
+            dsnMode = "unknown"
+        }
+        logInfo("serverless init: selecting database target=custom dsn_mode=%s", dsnMode)
+    } else {
+        if strings.Contains(dbURL, "://") { dsnMode = "url" } else if strings.Contains(dbURL, "host=") { dsnMode = "libpq" } else { dsnMode = "unknown" }
     }
 	var err error
 	sqldb, err = db.Connect(dbURL)

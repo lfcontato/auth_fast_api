@@ -11,6 +11,7 @@ devseed
 
 # Editors and misc
 .env
+.env*
 .vscode
 .idea
 *.log
