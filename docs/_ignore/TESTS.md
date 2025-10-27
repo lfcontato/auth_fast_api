@@ -26,7 +26,7 @@ curl -X POST http://localhost:8080/api/user \
   -d '{ "email":"luis.fernando.pereira.procempa@gmail.com", "username":"lfcontato", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
 
 # 2) Criar usuários Fake
-curl -X POST https://auth-fast-api.vercel.app/api/user \
+curl -X POST http://localhost:8080/api/user \
   -H 'Content-Type: application/json' \
   -d '{ "email":"user001@domain.com", "username":"user001", "password":"MinhaSenha123!", "confirm_password":"MinhaSenha123!" }'
 
