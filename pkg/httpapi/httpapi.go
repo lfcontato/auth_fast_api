@@ -2023,17 +2023,17 @@ func init() {
 	cfg = config.Load()
     dbURL := os.Getenv("DATABASE_URL")
     if dbURL == "" { dbURL = cfg.DatabaseURL }
-    // Em serverless (Vercel/Lambda), se não houver DATABASE_URL, use SQLite em /tmp (área gravável)
+    // Em serverless (Vercel/Lambda), se não houver DATABASE_URL, não iniciamos com fallback efêmero.
+    // Isso evita comportamento inconsistente (instâncias diferentes com bancos vazios em /tmp).
     if strings.TrimSpace(dbURL) == "" {
         if os.Getenv("VERCEL") != "" || os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
-            dbURL = "/tmp/auth_fast_api.db"
+            logWarn("serverless init: DATABASE_URL ausente; não iniciando sem banco persistente")
+            return
         }
     }
     if os.Getenv("VERCEL") != "" {
         // Log leve para depuração (não imprime DSN completo)
-        target := "custom"
-        if strings.Contains(dbURL, "/tmp/") || strings.HasPrefix(dbURL, "/tmp") { target = "sqlite-/tmp" }
-        logInfo("serverless init: selecting database target=%s", target)
+        logInfo("serverless init: selecting database target=custom")
     }
 	var err error
 	sqldb, err = db.Connect(dbURL)

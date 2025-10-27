@@ -19,3 +19,10 @@ ALLOWED_REDIRECT_URIS
   - `ALLOWED_REDIRECT_URIS="https://app.seu-dominio.app, https://localhost:3000"`
 - Se definido e a requisição tiver `Origin` ou `Referer` igual a uma dessas origens, os links de verificação enviados por e‑mail usarão essa origem como base.
 - Se não houver correspondência (ou a lista estiver vazia), usa `PUBLIC_BASE_URL`; se vazia, usa a URL pública da própria API.
+- Formatos aceitos para Postgres em `*_DATABASE_URL`:
+  - URL (recomendada): `postgresql://user:senha@host:5432/db?sslmode=require`
+    - Se a senha tiver caracteres especiais, faça percent-encode (ex.: `#` → `%23`, `@` → `%40`, `!` → `%21`).
+  - Formato libpq (sem encode): `host=... port=5432 dbname=... user=... password=... sslmode=require`
+    - Esse formato aceita senha “crua” (sem precisar encodar). Mantenha tudo entre aspas no `.env`.
+
+- Variáveis relacionadas: `DATABASE_URL`, `FACIENDUM_DATABASE_URL`, `AUTOMATA_DATABASE_URL` aceitam ambos formatos acima.

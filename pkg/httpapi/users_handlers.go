@@ -31,6 +31,10 @@ import (
 //  - Define defaults: tools_role='user', subscription_plan='trial' com expires_at conforme computeExpires.
 //  - Marca is_verified=false e gera código em users_verifications (TTL cfg.VerifyCodeTTLHours), enviando e‑mail se mailer estiver configurado.
 func userCreateHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     if r.Method != http.MethodPost {
         writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"success": false, "code": "HTTP_405", "message": "Método não permitido"})
         return
@@ -132,6 +136,10 @@ func userCreateHandler(w http.ResponseWriter, r *http.Request) {
 // userAuthTokenHandler: POST /user/auth/token
 // Autentica usuário por username/password e emite par de tokens.
 func userAuthTokenHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     if r.Method != http.MethodPost {
         writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"success": false, "code": "HTTP_405", "message": "Método não permitido"})
         return
@@ -212,6 +220,10 @@ func userAuthTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 // userAuthRefreshHandler: POST /user/auth/token/refresh
 func userAuthRefreshHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     if r.Method != http.MethodPost {
         writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"success": false, "code": "HTTP_405", "message": "Método não permitido"})
         return
@@ -266,6 +278,10 @@ func userAuthRefreshHandler(w http.ResponseWriter, r *http.Request) {
 
 // userAuthVerifyHandler: POST /user/auth/verify (code + password)
 func userAuthVerifyHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     var req struct{ Code, Password string }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_006", "message": "JSON inválido"})
@@ -303,6 +319,10 @@ func userAuthVerifyHandler(w http.ResponseWriter, r *http.Request) {
 
 // userAuthVerifyLinkHandler: GET /user/auth/verify-link?login=&code=
 func userAuthVerifyLinkHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     login := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("login")))
     code := strings.TrimSpace(r.URL.Query().Get("code"))
     if login == "" || len(code) != contants.VerificationCodeLength {
@@ -327,6 +347,10 @@ func userAuthVerifyLinkHandler(w http.ResponseWriter, r *http.Request) {
 
 // userAuthPasswordRecoveryHandler: POST /user/auth/password-recovery
 func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     ip := clientIP(r)
     if ok, _, _ := kv.AllowRate(r.Context(), "rl:userrecovery:ip:"+ip, int64(cfg.RecoveryIPLimit), time.Duration(cfg.RecoveryIPWindowMinutes)*time.Minute); !ok {
         writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas solicitações. Tente mais tarde."})
@@ -400,6 +424,10 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
 
 // userAuthVerificationCodeHandler: POST /user/auth/verification-code (reenvio)
 func userAuthVerificationCodeHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
     // Rate limit: por IP e por login
     ip := clientIP(r)
     if ok, _, _ := kv.AllowRate(r.Context(), "rl:userverifyresend:ip:"+ip, int64(cfg.VerifyResendIPLimit), time.Duration(cfg.VerifyResendIPWindowMinutes)*time.Minute); !ok {

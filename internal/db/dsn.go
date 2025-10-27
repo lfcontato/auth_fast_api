@@ -25,6 +25,13 @@ func ParseDSN(databaseURL string) (Driver, string) {
         return DriverSQLite, "file:auth_fast_api.db?cache=shared&mode=rwc&_pragma=busy_timeout(5000)"
     }
 
+    // Suporta formato libpq (key=value) para Postgres, ex.:
+    //   host=... port=5432 dbname=... user=... password=...
+    // Detectamos quando há ao menos duas chaves típicas e não há esquema "postgres://".
+    if isLibpqConnStr(databaseURL) {
+        return DriverPostgres, databaseURL
+    }
+
     // Normaliza casos comuns (ex.: "sqlite:///file.db")
     if strings.HasPrefix(databaseURL, "sqlite://") {
         // Remover prefixo sqlite:// e construir DSN para modernc sqlite
@@ -56,3 +63,15 @@ func ParseDSN(databaseURL string) (Driver, string) {
     return DriverSQLite, fmt.Sprintf("file:%s?cache=shared&mode=rwc&_pragma=busy_timeout(5000)", databaseURL)
 }
 
+// isLibpqConnStr detecta strings no formato libpq (key=value pares separados por espaço)
+func isLibpqConnStr(s string) bool {
+    t := strings.TrimSpace(s)
+    if t == "" { return false }
+    if strings.Contains(t, "://") { return false }
+    keys := []string{"host=", "user=", "password=", "port=", "dbname=", "sslmode=", "sslrootcert=", "application_name="}
+    found := 0
+    for _, k := range keys {
+        if strings.Contains(t, k) { found++ }
+    }
+    return found >= 2
+}
