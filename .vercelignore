@@ -16,3 +16,7 @@ devseed
 .idea
 *.log
 *.tmp
+
+# Documentação
+docs/
+REFERENCES/
