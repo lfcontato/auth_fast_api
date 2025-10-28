@@ -105,6 +105,7 @@ O Automata é o estúdio de agentes e interações com LLMs. Ele permite, por Us
 As operações respeitam a ACL por espaço; os recursos que são por usuário (ex.: chaves e prompts) também exigem autenticação.
 
 - Base: `/user/spaces/{space_hash}/automata` (aceita apenas `hash` do UsersSpace)
+- Importante: não use query string `?space_id=...`. O identificador do espaço vai no path como `hash` (ex.: `/user/spaces/e5035c.../automata/...`). O backend resolve o `id` interno a partir desse hash.
 - Endpoints (persistência com ACL aplicada):
   - GET `/keys` → lista chaves do espaço (proprietário: usuário autenticado) (ACL: `space:read`).
   - POST `/keys` → cadastra chave no espaço (ACL: `space:write`).

@@ -177,6 +177,9 @@ Agora com persistência básica.
 
 ABASE="http://localhost:8080/user/spaces/$SPACE_HASH/automata"
 
+Observação:
+- Não inclua `?space_id=` na URL. O hash do espaço já está no caminho (`/user/spaces/{space_hash}/...`) e o servidor resolve o `space_id` interno a partir dele.
+
 - Listar chaves (requires space:read):
 ```
 curl -s "$ABASE/keys" -H "Authorization: Bearer $ACCESS_TOKEN"
