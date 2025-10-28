@@ -10,6 +10,7 @@ import (
     "fmt"
     "os"
     "net/http"
+    "net/url"
     "strconv"
     "strings"
     "time"
@@ -183,9 +184,7 @@ func adminAuthPasswordRecoveryHandler_impl(w http.ResponseWriter, r *http.Reques
         writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas solicitações. Tente mais tarde."})
         return
     }
-    var req struct {
-        Email string `json:"email"`
-    }
+    var req struct { Email string `json:"email"`; RedirectURI string `json:"redirect_uri"` }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_009", "message": "JSON inválido"})
         return
@@ -260,7 +259,17 @@ func adminAuthPasswordRecoveryHandler_impl(w http.ResponseWriter, r *http.Reques
     // Envia e-mail com nova senha e código.
     // Em serverless (Vercel), evite goroutine: envie de forma síncrona antes de responder.
     if mailer != nil {
-        verifyURL := buildVerifyURL(r, code)
+        // Monta link para página de definição de nova senha no frontend
+        base := resolveBaseForEmail(r, req.RedirectURI)
+        verifyURL := ""
+        pathPrefix := ""
+        if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
+        if base != "" {
+            q := url.Values{}
+            q.Set("login", req.Email)
+            q.Set("code", code)
+            verifyURL = base + pathPrefix + "/admin/auth/verify-password?" + q.Encode()
+        }
         tmpl := cfg.AdminCreatedTemplate
         if strings.TrimSpace(tmpl) == "" {
             tmpl = cfg.EmailTemplateName

@@ -19,6 +19,8 @@ func handleUserAuthRoutes(w http.ResponseWriter, r *http.Request) bool {
         userHandleAuthVerify(w, r); return true
     case path == "/user/auth/verify-link" && r.Method == http.MethodGet:
         userHandleAuthVerifyLink(w, r); return true
+    case path == "/user/auth/verify-password" && r.Method == http.MethodPost:
+        userHandleAuthVerifyPassword(w, r); return true
     case path == "/user/auth/password-recovery" && r.Method == http.MethodPost:
         userHandlePasswordRecovery(w, r); return true
     case path == "/user/auth/verification-code" && r.Method == http.MethodPost:

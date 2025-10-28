@@ -357,7 +357,7 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
         writeJSON(w, http.StatusTooManyRequests, map[string]any{"success": false, "code": "AUTH_429_IP", "message": "Muitas solicitações. Tente mais tarde."})
         return
     }
-    var req struct{ Email string `json:"email"` }
+    var req struct{ Email string `json:"email"`; RedirectURI string `json:"redirect_uri"` }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_009", "message": "JSON inválido"})
         return
@@ -396,7 +396,7 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
     _ = tx.Commit()
     // email
     if mailer != nil && !isTestEmail(req.Email) {
-        base := resolveBaseForEmail(r, "")
+        base := resolveBaseForEmail(r, req.RedirectURI)
         var verifyURL string
         pathPrefix := ""
         if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" { pathPrefix = "/api" }
@@ -404,7 +404,7 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
             q := url.Values{}
             q.Set("login", req.Email)
             q.Set("code", code)
-            verifyURL = base + pathPrefix + "/user/auth/verify-link?" + q.Encode()
+            verifyURL = base + pathPrefix + "/user/auth/verify-password?" + q.Encode()
         }
         data := map[string]any{
             "Title":             "Recuperação de senha",
@@ -421,6 +421,53 @@ func userAuthPasswordRecoveryHandler(w http.ResponseWriter, r *http.Request) {
         _ = mailer.Send(ctx, emailsvc.Params{To: []string{req.Email}, Subject: contants.EmailSubjectPasswordRecovery, TemplateName: cfg.EmailTemplateName, Data: data})
     }
     writeJSON(w, http.StatusOK, map[string]any{"success": true, "sent": true})
+}
+
+// userAuthVerifyPasswordHandler: POST /user/auth/verify-password?login=&code=
+// Define uma nova senha para o usuário usando o código de verificação ativo.
+func userAuthVerifyPasswordHandler(w http.ResponseWriter, r *http.Request) {
+    if service == nil || sqldb == nil {
+        writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "code": "AUTH_503_INIT", "message": "Serviço indisponível. Tente novamente."})
+        return
+    }
+    login := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("login")))
+    code := strings.TrimSpace(r.URL.Query().Get("code"))
+    if login == "" || len(code) != contants.VerificationCodeLength {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_011", "message": "Parâmetros inválidos"})
+        return
+    }
+    var body struct{ Password string `json:"password"`; ConfirmPassword string `json:"confirm_password"` }
+    if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_JSON", "message": "JSON inválido"})
+        return
+    }
+    body.Password = strings.TrimSpace(body.Password)
+    body.ConfirmPassword = strings.TrimSpace(body.ConfirmPassword)
+    if body.Password == "" || body.ConfirmPassword == "" || body.Password != body.ConfirmPassword {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_PW_MISMATCH", "message": "Senhas não conferem"})
+        return
+    }
+    if err := validatePassword(body.Password); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_PW_POLICY", "message": err.Error()})
+        return
+    }
+    var userID int64
+    if err := sqldb.QueryRow(db.Rebind(`SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1`), login, login).Scan(&userID); err != nil {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_012", "message": "Usuário não encontrado"})
+        return
+    }
+    // Verifica código válido para este usuário
+    res, _ := sqldb.Exec(db.Rebind(`UPDATE users_verifications SET consumed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND code = ? AND consumed_at IS NULL AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`), userID, code)
+    n, _ := res.RowsAffected()
+    if n == 0 {
+        writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_013", "message": "Código inválido ou expirado"})
+        return
+    }
+    // Atualiza senha e marca verificado
+    hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+    if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "code": "AUTH_500_HASH", "message": "Falha ao processar senha"}); return }
+    _, _ = sqldb.Exec(db.Rebind(`UPDATE users SET password_hash = ?, is_verified = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`), string(hash), true, userID)
+    writeJSON(w, http.StatusOK, map[string]any{"success": true, "user_id": userID, "verified": true})
 }
 
 // userAuthVerificationCodeHandler: POST /user/auth/verification-code (reenvio)

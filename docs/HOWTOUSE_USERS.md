@@ -134,18 +134,18 @@ curl -s -X POST http://localhost:8080/user/auth/verify \
   -d '{"code":"<CODIGO_RECEBIDO>","password":"minhasenha"}' | jq .
 ```
 
-5) Recuperar senha (gera senha temporária + novo código por e‑mail)
+5) Recuperar senha (gera nova senha temporária + envia link para definir senha)
 ```
 curl -s -X POST http://localhost:8080/user/auth/password-recovery \
   -H 'Content-Type: application/json' \
-  -d '{"email":"usuario@exemplo.com"}' | jq .
+  -d '{"email":"usuario@exemplo.com","redirect_uri":"https://auth-fast-users.vercel.app"}' | jq .
 ```
 
-6) Verificar conta novamente (após recovery) usando o novo código recebido
+6) Definir nova senha via código (verificado pelo link recebido)
 ```
-curl -s -X POST http://localhost:8080/user/auth/verify \
+curl -s -X POST 'http://localhost:8080/user/auth/verify-password?login=usuario&code=<NOVO_CODIGO>' \
   -H 'Content-Type: application/json' \
-  -d '{"code":"<NOVO_CODIGO>","password":"<NOVA_SENHA>"}' | jq .
+  -d '{"password":"NovaSenha@123","confirm_password":"NovaSenha@123"}' | jq .
 ```
 
 # E-mails de verificação

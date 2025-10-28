@@ -201,11 +201,11 @@ Rotas e cURL
 
 - Recuperação de senha (não autenticada)
   - POST `/admin/auth/password-recovery`
-  - Body: `{ "email": "admin@dominio.com" }`
+  - Body: `{ "email": "admin@dominio.com", "redirect_uri": "https://meu-frontend-admin" }`
   - cURL:
-    - `curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"admin@dominio.com"}'`
+    - `curl -sS -X POST http://localhost:8080/admin/auth/password-recovery -H 'Content-Type: application/json' -d '{"email":"admin@dominio.com","redirect_uri":"https://auth-fast-admins.vercel.app"}'`
   - Comportamento:
-    - Gera nova senha (8 dígitos), marca `is_verified = 0`, cria novo código e envia e‑mail com senha/código e link de verificação.
+    - Gera nova senha (8 dígitos), marca `is_verified = 0`, cria novo código e envia e‑mail com senha/código e um link para a página de "definição de nova senha" em `redirect_uri` (`/admin/auth/verify-password?login=&code=`).
     - Resposta é 200 OK mesmo se o e‑mail não existir (evita enumeração).
   - Resposta (200):
     ```json
