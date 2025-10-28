@@ -142,7 +142,7 @@
 
     "/user/spaces": {
       "get": { "summary": "Listar UsersSpaces do usuário (owner)", "security": [{"BearerAuth":[]}], "responses": { "200": { "description": "OK" } } },
-      "post": { "summary": "Criar UsersSpace (tools_role=admin)", "security": [{"BearerAuth":[]}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type":"object","properties":{"name":{"type":"string"}}, "required":["name"]}}}}, "responses": { "201": {"description":"Criado"} } }
+      "post": { "summary": "Criar UsersSpace (qualquer usuário verificado)", "security": [{"BearerAuth":[]}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type":"object","properties":{"name":{"type":"string"}}, "required":["name"]}}}}, "responses": { "201": {"description":"Criado"} } }
     },
     "/user/spaces/{space_id}/members": {
       "get": { "summary": "Listar membros (owner)", "security": [{"BearerAuth":[]}], "parameters": [{"in":"path","name":"space_id","required":true,"schema":{"type":"integer"}}], "responses": { "200": { "description": "OK" } } },

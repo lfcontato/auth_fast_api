@@ -49,7 +49,7 @@ Observação (Vercel): ao consumir pela Vercel, use o prefixo `/api` (ex.: `/api
 - Tabela `users_spaces`:
   - `owner_user_id`, `name`, `hash` (único, 32 chars), `created_at`, `updated_at`.
 - Rotas atuais:
-  - POST `/user/spaces` – criar (requer JWT de usuário e `tools_role=admin`).
+- POST `/user/spaces` – criar (requer JWT de usuário verificado; qualquer usuário pode criar).
   - GET `/user/spaces` – listar espaços do usuário autenticado (onde ele é owner).
 - Membership e permissões:
   - POST `/user/spaces/{space_id}/members` – adicionar membro (owner apenas) `{login, role}`.

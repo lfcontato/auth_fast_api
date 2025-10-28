@@ -9,7 +9,7 @@ Navegação: [Admins](ADMINS.md) · [Usuários](USERS.md) · [Como usar (Users)]
 
 - Tools são módulos independentes associados a um UsersSpace.
 - Cada UsersSpace tem um `hash` único (32 chars) e um dono (`owner_user_id`).
-- Usuários com `tools_role=admin` podem criar UsersSpaces via API.
+- Qualquer usuário verificado pode criar UsersSpaces via API.
 - Exemplos de tools planejadas:
   - faciendum (To‑Do/Kanban) – `FACIENDUM_DATABASE_URL=sqlite:///faciendum_test.db`
   - automata (Estúdio de Agentes) – `AUTOMATA_DATABASE_URL=sqlite:///automata_test.db`
@@ -18,8 +18,8 @@ Navegação: [Admins](ADMINS.md) · [Usuários](USERS.md) · [Como usar (Users)]
 
 # Políticas de Acesso
 
-- tools_role=admin: cria UsersSpaces (é o owner), pode gerenciar conteúdo e permissões do espaço.
-- tools_role=user: não cria UsersSpaces; acesso restrito ao que for concedido por membership.
+- tools_role=admin: pode gerenciar conteúdo e permissões do espaço (não é mais requisito para criar UsersSpaces).
+- tools_role=user: não gerencia conteúdo; acesso restrito ao que for concedido por membership.
 - tools_role=guest: convidado; acesso somente uso, conforme membership.
 
 # Endpoints de Membership

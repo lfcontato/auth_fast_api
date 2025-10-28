@@ -27,11 +27,6 @@ func userSpacesCreateHandler(w http.ResponseWriter, r *http.Request) {
     }
     userID, err := authenticateUser(r)
     if err != nil { writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_USER", "message": err.Error()}); return }
-    var role string
-    if err := sqldb.QueryRow(db.Rebind(`SELECT tools_role FROM users WHERE id = ?`), userID).Scan(&role); err != nil || strings.ToLower(role) != "admin" {
-        writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_SPACE", "message": "Permissão insuficiente"})
-        return
-    }
     var req struct{ Name string `json:"name"` }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
         writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTH_400_SPACE", "message": "Nome é obrigatório"})

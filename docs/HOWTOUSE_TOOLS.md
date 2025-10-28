@@ -6,7 +6,7 @@ Manutenção: atualize estes exemplos sempre que houver mudanças nas rotas, par
 # UsersSpaces
 
 Pré‑requisitos
-- Ter um usuário com `tools_role=admin`, `is_verified=true` e um plano vigente (ex.: `lifetime`).
+- Ter um usuário verificado (`is_verified=true`) e com plano vigente (ex.: `lifetime`).
 - Ter `FACIENDUM_DATABASE_URL` configurado (ou usar fallback local). Exemplos:
   - `FACIENDUM_DATABASE_URL=sqlite:///faciendum_test.db`
   - `FACIENDUM_DATABASE_URL=postgres://user:pass@host:5432/dbname`
@@ -19,7 +19,7 @@ ACCESS_TOKEN=$(curl -s -X POST http://localhost:8080/user/auth/token \
 echo $ACCESS_TOKEN
 ```
 
-- Criar espaço (requer usuário com `tools_role=admin`):
+- Criar espaço (qualquer usuário verificado):
 ```
 ACCESS_TOKEN="<JWT>"
 curl -X POST http://localhost:8080/user/spaces \

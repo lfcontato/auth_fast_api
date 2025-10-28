@@ -85,7 +85,7 @@ curl -X POST http://localhost:8080/user \
   }'
 ```
 
-# Criar UsersSpace (requer tools_role=admin)
+# Criar UsersSpace (qualquer usuário verificado)
 ```
 ACCESS_TOKEN="<JWT_DO_LOGIN>"
 curl -X POST http://localhost:8080/user/spaces \

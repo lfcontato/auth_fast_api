@@ -83,5 +83,3 @@ curl -X POST http://localhost:8080/user/auth/token \
   -d '{"username":"usuario","password":"MinhaSenha123!"}'
 
 
-
-
