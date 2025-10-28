@@ -19,8 +19,11 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
     if len(parts) < 5 || parts[0] != "user" || parts[1] != "spaces" || parts[3] != "automata" {
         return false
     }
-    spaceID, err := strconv.ParseInt(parts[2], 10, 64)
-    if err != nil || spaceID <= 0 { return false }
+    // Aceita apenas hash do UsersSpace no segmento {space_id}
+    var spaceID int64
+    if err := sqldb.QueryRow(db.Rebind(`SELECT id FROM users_spaces WHERE hash = ? LIMIT 1`), parts[2]).Scan(&spaceID); err != nil || spaceID <= 0 {
+        return false
+    }
     userID, err := authenticateUser(r)
     if err != nil {
         writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_USER", "message": err.Error()})
@@ -39,7 +42,7 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
         switch r.Method {
         case http.MethodGet:
             if err := requireSpacePermission(r.Context(), userID, spaceID, actionSpaceRead); err != nil { writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_ACL"}); return true }
-            rows, err := autdb.Query(db.Rebind(`SELECT id, provider, name, created_at FROM automata_api_keys WHERE user_id = ? ORDER BY id DESC`), userID)
+            rows, err := autdb.Query(db.Rebind(`SELECT id, provider, name, created_at FROM automata_api_keys WHERE user_id = ? AND space_id = ? ORDER BY id DESC`), userID, spaceID)
             if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false}); return true }
             defer rows.Close()
             items := make([]map[string]any, 0)
@@ -48,9 +51,9 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
             return true
         case http.MethodPost:
             if err := requireSpacePermission(r.Context(), userID, spaceID, actionSpaceWrite); err != nil { writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_ACL"}); return true }
-            var req struct{ Provider, Name, ApiKey string }
+            var req struct{ Provider string `json:"provider"`; Name string `json:"name"`; ApiKey string `json:"api_key"` }
             if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Provider) == "" || strings.TrimSpace(req.ApiKey) == "" { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTOMATA_400_KEY", "message": "provider e api_key são obrigatórios"}); return true }
-            res, err := autdb.Exec(db.Rebind(`INSERT INTO automata_api_keys (user_id, provider, name, api_key) VALUES (?,?,?,?)`), userID, strings.TrimSpace(req.Provider), strings.TrimSpace(req.Name), strings.TrimSpace(req.ApiKey))
+            res, err := autdb.Exec(db.Rebind(`INSERT INTO automata_api_keys (space_id, user_id, provider, name, api_key) VALUES (?,?,?,?,?)`), spaceID, userID, strings.TrimSpace(req.Provider), strings.TrimSpace(req.Name), strings.TrimSpace(req.ApiKey))
             if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false}); return true }
             kid, _ := res.LastInsertId()
             writeJSON(w, http.StatusCreated, map[string]any{"success": true, "space_id": spaceID, "api_key_id": kid})
@@ -58,7 +61,7 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
         case http.MethodDelete:
             if itemID <= 0 { return false }
             if err := requireSpacePermission(r.Context(), userID, spaceID, actionSpaceWrite); err != nil { writeJSON(w, http.StatusForbidden, map[string]any{"success": false}); return true }
-            res, err := autdb.Exec(db.Rebind(`DELETE FROM automata_api_keys WHERE id = ? AND user_id = ?`), itemID, userID)
+            res, err := autdb.Exec(db.Rebind(`DELETE FROM automata_api_keys WHERE id = ? AND user_id = ? AND space_id = ?`), itemID, userID, spaceID)
             if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false}); return true }
             n, _ := res.RowsAffected(); if n == 0 { writeJSON(w, http.StatusNotFound, map[string]any{"success": false}); return true }
             writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -77,11 +80,11 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
             return true
         case http.MethodPost:
             if err := requireSpacePermission(r.Context(), userID, spaceID, actionSpaceWrite); err != nil { writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_ACL"}); return true }
-            var req struct{ Name, Description, Provider string; ApiKeyID int64 }
+            var req struct{ Name string `json:"name"`; Description string `json:"description"`; Provider string `json:"provider"`; ApiKeyID int64 `json:"api_key_id"` }
             if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTOMATA_400_PROMPT", "message": "name é obrigatório"}); return true }
             if req.ApiKeyID > 0 {
                 var exists int
-                if err := autdb.QueryRow(db.Rebind(`SELECT 1 FROM automata_api_keys WHERE id = ? AND user_id = ?`), req.ApiKeyID, userID).Scan(&exists); err != nil { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTOMATA_400_KEY_REF", "message": "api_key_id inválido"}); return true }
+                if err := autdb.QueryRow(db.Rebind(`SELECT 1 FROM automata_api_keys WHERE id = ? AND user_id = ? AND space_id = ?`), req.ApiKeyID, userID, spaceID).Scan(&exists); err != nil { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTOMATA_400_KEY_REF", "message": "api_key_id inválido"}); return true }
             }
             res, err := autdb.Exec(db.Rebind(`INSERT INTO automata_prompts (user_id, api_key_id, provider, name, description) VALUES (?,?,?,?,?)`), userID, nullIfZero(req.ApiKeyID), nullIfEmpty(req.Provider), strings.TrimSpace(req.Name), strings.TrimSpace(req.Description))
             if err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false}); return true }
@@ -91,11 +94,11 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
         case http.MethodPatch:
             if itemID <= 0 { return false }
             if err := requireSpacePermission(r.Context(), userID, spaceID, actionSpaceWrite); err != nil { writeJSON(w, http.StatusForbidden, map[string]any{"success": false}); return true }
-            var req struct{ Name, Description, Provider string; ApiKeyID int64 }
+            var req struct{ Name string `json:"name"`; Description string `json:"description"`; Provider string `json:"provider"`; ApiKeyID int64 `json:"api_key_id"` }
             if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false}); return true }
             if req.ApiKeyID > 0 {
                 var exists int
-                if err := autdb.QueryRow(db.Rebind(`SELECT 1 FROM automata_api_keys WHERE id = ? AND user_id = ?`), req.ApiKeyID, userID).Scan(&exists); err != nil { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false}); return true }
+                if err := autdb.QueryRow(db.Rebind(`SELECT 1 FROM automata_api_keys WHERE id = ? AND user_id = ? AND space_id = ?`), req.ApiKeyID, userID, spaceID).Scan(&exists); err != nil { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false}); return true }
             }
             if _, err := autdb.Exec(db.Rebind(`UPDATE automata_prompts SET name = COALESCE(NULLIF(?, ''), name), description = COALESCE(?, description), provider = COALESCE(NULLIF(?, ''), provider), api_key_id = COALESCE(?, api_key_id), updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`), strings.TrimSpace(req.Name), nullIfEmpty(req.Description), nullIfEmpty(req.Provider), nullIfZero(req.ApiKeyID), itemID, userID); err != nil { writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false}); return true }
             writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -122,7 +125,7 @@ func handleAutomataRoutes(w http.ResponseWriter, r *http.Request) bool {
             return true
         case http.MethodPost:
             if err := requireSpacePermission(r.Context(), userID, spaceID, actionSpaceWrite); err != nil { writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTH_403_ACL"}); return true }
-            var req struct{ PromptID int64; Message string }
+            var req struct{ PromptID int64 `json:"prompt_id"`; Message string `json:"message"` }
             if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PromptID <= 0 || strings.TrimSpace(req.Message) == "" { writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "code": "AUTOMATA_400_CHAT", "message": "prompt_id e message são obrigatórios"}); return true }
             var owner int64
             if err := autdb.QueryRow(db.Rebind(`SELECT user_id FROM automata_prompts WHERE id = ? LIMIT 1`), req.PromptID).Scan(&owner); err != nil || owner != userID { writeJSON(w, http.StatusForbidden, map[string]any{"success": false, "code": "AUTOMATA_403_PROMPT"}); return true }

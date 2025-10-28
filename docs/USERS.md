@@ -32,7 +32,7 @@ Navegação: [Admins](ADMINS.md) · [Tools](TOOLS.md) · [Como usar (Users)](HOW
 
 - POST `/user/auth/token` – login com `{username,password}` → `access_token` e `refresh_token`.
 - POST `/user/auth/token/refresh` – novo par de tokens a partir de `refresh_token` válido.
-- POST `/user/auth/verify` – confirma conta via `{code,password}`.
+- POST `/user/auth/verify` – ativa a conta utilizando o código de verificação e a senha atual do usuário (`{code,password}`).
 - GET `/user/auth/verify-link?login=&code=` – confirma via link público (por `username` ou `email`).
 - POST `/user/auth/password-recovery` – redefine senha e envia código por e‑mail.
 - POST `/user/auth/verification-code` – reenvia código de verificação (por `login`).

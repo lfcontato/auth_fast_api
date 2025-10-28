@@ -14,6 +14,16 @@ Navegação: [Admins](ADMINS.md) · [Usuários](USERS.md) · [Como usar (Users)]
   - faciendum (To‑Do/Kanban) – `FACIENDUM_DATABASE_URL=sqlite:///faciendum_test.db`
   - automata (Estúdio de Agentes) – `AUTOMATA_DATABASE_URL=sqlite:///automata_test.db`
 
+# UsersSpaces
+
+- O que são: “espaços de trabalho” isolados do usuário, que agrupam dados e funcionalidades das tools sob um mesmo contexto (um `space_id`).
+- Propriedade: quem cria torna‑se o owner (`owner_user_id`). O owner gerencia membros e papéis do espaço.
+- Identidade: cada espaço possui um `hash` (32 chars) para identificação amigável/URLs e um `id` numérico interno.
+- Membros e papéis: associação em `users_spaces_members` com papéis locais (`owner` implícito, `admin`, `user`, `guest`).
+- ACL: toda operação de tool passa por checagem de permissão por espaço (matriz em `spaceACL`).
+- Criação/Listagem: `POST /user/spaces` (qualquer usuário verificado) e `GET /user/spaces` (lista onde sou owner).
+- Como as tools usam: rotas namespaced por espaço, ex.: `/user/spaces/{space_id}/faciendum/...` e `/user/spaces/{space_id}/automata/...`; as tabelas das tools possuem `space_id` para vincular recursos ao espaço.
+
  
 
 # Políticas de Acesso
@@ -57,7 +67,14 @@ Observação: gestão de membros continua restrita ao proprietário do espaço.
 
 # Faciendum (ACL + Persistência Completa)
 
-- Base: `/user/spaces/{space_id}/faciendum`
+O Faciendum é a ferramenta de Kanban/To‑Do do projeto. Ele organiza trabalho em:
+- Boards (quadros) por espaço
+- Tracks (trilhas/colunas) dentro de cada board, como “A Fazer”, “Em Progresso” e “Feito”
+- Tasks (tarefas) que transitam entre as trilhas conforme avançam
+
+Cada board/track/task pertence a um UsersSpace, e as ações respeitam a ACL local (owner/admin/user/guest).
+
+- Base: `/user/spaces/{space_hash}/faciendum` (aceita apenas `hash` do UsersSpace)
 - Endpoints:
   - Boards:
     - GET `/boards` → lista boards do espaço (ACL: `board:read`).
@@ -80,12 +97,21 @@ Exemplos em HOWTOUSE_TOOLS.md.
 
 # Automata (ACL + Persistência Completa)
 
-- Base: `/user/spaces/{space_id}/automata`
+O Automata é o estúdio de agentes e interações com LLMs. Ele permite, por UsersSpace:
+- Gerenciar chaves de API (por usuário)
+- Cadastrar prompts (por usuário) para reutilização
+- Criar chats vinculados ao espaço, usando um prompt/base de conhecimento
+
+As operações respeitam a ACL por espaço; os recursos que são por usuário (ex.: chaves e prompts) também exigem autenticação.
+
+- Base: `/user/spaces/{space_hash}/automata` (aceita apenas `hash` do UsersSpace)
 - Endpoints (persistência com ACL aplicada):
-  - GET `/keys` → lista chaves do usuário (ACL: `space:read`).
-  - POST `/keys` → cadastra chave (ACL: `space:write`).
+  - GET `/keys` → lista chaves do espaço (proprietário: usuário autenticado) (ACL: `space:read`).
+  - POST `/keys` → cadastra chave no espaço (ACL: `space:write`).
+    - `provider`: enum `openai|gemini|grok`.
   - GET `/prompts` → lista prompts do usuário (ACL: `space:read`).
   - POST `/prompts` → cadastra prompt (ACL: `space:write`).
+    - `provider` (opcional): enum `openai|gemini|grok`.
   - GET `/chats` → lista chats (ACL: `space:read`).
   - POST `/chats` → cria chat (ACL: `space:write`).
 

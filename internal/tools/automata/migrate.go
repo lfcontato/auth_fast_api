@@ -15,13 +15,14 @@ func Migrate(ctx context.Context, db *sql.DB, isPostgres bool) error {
         stmts = []string{
             `CREATE TABLE IF NOT EXISTS automata_api_keys (
                 id BIGSERIAL PRIMARY KEY,
+                space_id BIGINT NOT NULL,
                 user_id BIGINT NOT NULL,
                 provider TEXT NOT NULL,
                 name TEXT NULL,
                 api_key TEXT NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );`,
-            `CREATE INDEX IF NOT EXISTS idx_automata_api_keys_user ON automata_api_keys(user_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_automata_api_keys_space_user ON automata_api_keys(space_id, user_id);`,
             `CREATE TABLE IF NOT EXISTS automata_prompts (
                 id BIGSERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -48,13 +49,14 @@ func Migrate(ctx context.Context, db *sql.DB, isPostgres bool) error {
         stmts = []string{
             `CREATE TABLE IF NOT EXISTS automata_api_keys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                space_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
                 provider TEXT NOT NULL,
                 name TEXT NULL,
                 api_key TEXT NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );`,
-            `CREATE INDEX IF NOT EXISTS idx_automata_api_keys_user ON automata_api_keys(user_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_automata_api_keys_space_user ON automata_api_keys(space_id, user_id);`,
             `CREATE TABLE IF NOT EXISTS automata_prompts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -83,6 +85,13 @@ func Migrate(ctx context.Context, db *sql.DB, isPostgres bool) error {
             return err
         }
     }
+    // Best-effort ALTERs para esquemas existentes
+    if isPostgres {
+        _, _ = db.ExecContext(ctx, `ALTER TABLE automata_api_keys ADD COLUMN IF NOT EXISTS space_id BIGINT`)
+        _, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_automata_api_keys_space_user ON automata_api_keys(space_id, user_id)`)
+    } else {
+        _, _ = db.ExecContext(ctx, `ALTER TABLE automata_api_keys ADD COLUMN space_id INTEGER`)
+        _, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_automata_api_keys_space_user ON automata_api_keys(space_id, user_id)`)
+    }
     return nil
 }
-

@@ -18,8 +18,11 @@ func handleFaciendumRoutes(w http.ResponseWriter, r *http.Request) bool {
     if len(parts) < 5 || parts[0] != "user" || parts[1] != "spaces" || parts[3] != "faciendum" {
         return false
     }
-    spaceID, err := strconv.ParseInt(parts[2], 10, 64)
-    if err != nil || spaceID <= 0 { return false }
+    // Aceita apenas hash do UsersSpace no segmento {space_id}
+    var spaceID int64
+    if err := sqldb.QueryRow(db.Rebind(`SELECT id FROM users_spaces WHERE hash = ? LIMIT 1`), parts[2]).Scan(&spaceID); err != nil || spaceID <= 0 {
+        return false
+    }
     userID, err := authenticateUser(r)
     if err != nil {
         writeJSON(w, http.StatusUnauthorized, map[string]any{"success": false, "code": "AUTH_401_USER", "message": err.Error()})

@@ -34,6 +34,13 @@ curl -s http://localhost:8080/user/spaces \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
+Obter rapidamente o hash do primeiro espaço e definir `SPACE_HASH` para usar nas rotas das tools:
+```
+SPACE_HASH=$(curl -s http://localhost:8080/user/spaces \
+  -H "Authorization: Bearer $ACCESS_TOKEN" | jq -r '.items[0].hash')
+echo $SPACE_HASH
+```
+
 # Databases das Tools
 
 - Configure por variáveis de ambiente:
@@ -78,7 +85,8 @@ curl -X DELETE http://localhost:8080/user/spaces/$SPACE_ID/members/$TARGET_USER_
 
 # Faciendum (ACL + Persistência Completa)
 
-BASE="http://localhost:8080/user/spaces/$SPACE_ID/faciendum"
+SPACE_HASH="<hash-do-seu-userspace>"
+BASE="http://localhost:8080/user/spaces/$SPACE_HASH/faciendum"
 
 - Listar boards (requer board:read):
 ```
@@ -167,7 +175,7 @@ curl -s "$BASE/tasks?board_id=$BOARD_ID" -H "Authorization: Bearer $ACCESS_TOKEN
 # Automata (Stubs com ACL)
 Agora com persistência básica.
 
-ABASE="http://localhost:8080/user/spaces/$SPACE_ID/automata"
+ABASE="http://localhost:8080/user/spaces/$SPACE_HASH/automata"
 
 - Listar chaves (requires space:read):
 ```
@@ -175,6 +183,7 @@ curl -s "$ABASE/keys" -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 - Cadastrar chave (requires space:write):
+  - provider aceito: `openai|gemini|grok`
 ```
 curl -X POST "$ABASE/keys" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -188,6 +197,7 @@ curl -s "$ABASE/prompts" -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 - Cadastrar prompt (requires space:write):
+  - provider (opcional) aceito: `openai|gemini|grok`
 ```
 curl -X POST "$ABASE/prompts" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \

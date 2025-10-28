@@ -29,6 +29,7 @@ curl -X POST http://localhost:8080/user/auth/token/refresh \
 ```
 
 # Verificar Conta (code + password)
+Este endpoint ativa a conta utilizando o código de verificação enviado por e‑mail e a senha atual do usuário.
 ```
 curl -X POST http://localhost:8080/user/auth/verify \
   -H 'Content-Type: application/json' \
